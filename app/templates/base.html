@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}MLOps Dashboard{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/static/js/htmx.min.js"></script>
+  <script src="/static/js/chart.umd.min.js"></script>
+  <style>
+    .htmx-indicator { display: none; }
+    .htmx-request .htmx-indicator { display: inline-block; }
+    .htmx-request.htmx-indicator { display: inline-block; }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen font-sans">
+
+  <!-- ヘッダー -->
+  <header class="bg-gray-900 border-b border-gray-800 px-6 py-4">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center gap-4">
+
+      <!-- ロゴ -->
+      <div class="flex items-center gap-3">
+        <svg class="w-7 h-7 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        <span class="text-lg font-bold text-white tracking-wide">MLOps Dashboard</span>
+      </div>
+
+      <!-- ページナビ -->
+      <nav class="flex items-center gap-1">
+        <a href="/"
+          class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
+            {% if current_page == 'dashboard' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
+          詳細
+        </a>
+        <a href="/summary"
+          class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
+            {% if current_page == 'summary' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
+          サマリー
+        </a>
+      </nav>
+
+      <!-- ページ固有のヘッダーコントロール -->
+      <div class="flex flex-wrap items-center gap-3 ml-auto">
+        {% block header_controls %}{% endblock %}
+      </div>
+
+    </div>
+  </header>
+
+  <!-- メインコンテンツ -->
+  <main class="max-w-7xl mx-auto px-6 py-6">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- フッター -->
+  <footer class="fixed bottom-4 right-4">
+    <a href="/docs" target="_blank"
+      class="text-xs text-gray-600 hover:text-gray-400 transition-colors bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
+      API Docs
+    </a>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

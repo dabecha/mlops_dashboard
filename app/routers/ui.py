@@ -19,9 +19,45 @@ templates = Jinja2Templates(directory=_TEMPLATE_DIR)
 
 
 @router.get("/", response_class=HTMLResponse)
-async def index(request: Request, db: Session = Depends(get_db)):
+async def index(
+    request: Request,
+    project_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+):
     projects = db.query(Project).order_by(Project.created_at).all()
-    return templates.TemplateResponse(request, "index.html", {"projects": projects})
+    # サマリーページからの直リンク対応: project_id が指定されていれば先頭に移動
+    initial_project_id = project_id or (projects[0].id if projects else None)
+    return templates.TemplateResponse(
+        request, "index.html", {"projects": projects, "initial_project_id": initial_project_id}
+    )
+
+
+@router.get("/summary", response_class=HTMLResponse)
+async def summary_page(request: Request, db: Session = Depends(get_db)):
+    projects = db.query(Project).order_by(Project.created_at).all()
+    return templates.TemplateResponse(request, "summary.html", {"projects": projects})
+
+
+@router.get("/ui/summary-panels", response_class=HTMLResponse)
+async def summary_panels(
+    request: Request,
+    hours: int = Query(24),
+    drift_window: int = Query(100),
+    db: Session = Depends(get_db),
+):
+    projects = db.query(Project).order_by(Project.created_at).all()
+    rows = []
+    for p in projects:
+        summary = metrics_svc.get_summary(db, p.id, hours)
+        accuracy = metrics_svc.get_latest_accuracy(db, p.id, hours=168, task_type=p.task_type)
+        drift = drift_svc.detect_drift(db, p.id, drift_window)
+        rows.append({"project": p, "summary": summary, "accuracy": accuracy, "drift": drift})
+
+    return templates.TemplateResponse(
+        request,
+        "partials/summary_panels.html",
+        {"rows": rows, "hours": hours},
+    )
 
 
 @router.get("/ui/panels", response_class=HTMLResponse)

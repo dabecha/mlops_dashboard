@@ -69,6 +69,40 @@ def get_latency_distribution(db: Session, project_id: int, hours: int = 24) -> d
     return {"labels": labels, "counts": counts.tolist()}
 
 
+def get_latest_accuracy(
+    db: Session, project_id: int, hours: int = 168, task_type: str = "classification"
+) -> dict:
+    """指定期間の精度 / MAE を単一の数値として返す。"""
+    since = datetime.utcnow() - timedelta(hours=hours)
+    logs = (
+        db.query(InferenceLog)
+        .filter(
+            InferenceLog.project_id == project_id,
+            InferenceLog.timestamp >= since,
+            InferenceLog.actual_label != None,  # noqa: E711
+            InferenceLog.is_error == False,  # noqa: E712
+        )
+        .all()
+    )
+    if not logs:
+        return {"value": None, "metric_name": "Accuracy (%)" if task_type == "classification" else "MAE", "sample_count": 0}
+
+    if task_type == "classification":
+        correct = sum(1 for l in logs if (l.prediction > 0.5) == bool(l.actual_label))
+        return {
+            "value": round(correct / len(logs) * 100, 1),
+            "metric_name": "Accuracy (%)",
+            "sample_count": len(logs),
+        }
+    else:
+        mae = sum(abs(l.prediction - l.actual_label) for l in logs) / len(logs)
+        return {
+            "value": round(mae, 3),
+            "metric_name": "MAE",
+            "sample_count": len(logs),
+        }
+
+
 def get_accuracy_over_time(
     db: Session, project_id: int, days: int = 7, task_type: str = "classification"
 ) -> dict:
