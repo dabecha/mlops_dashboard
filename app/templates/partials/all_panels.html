@@ -1,0 +1,174 @@
+<!-- ===== サマリーカード ===== -->
+<section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+
+  <!-- 総リクエスト数 -->
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+    <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">総リクエスト数</p>
+    <p class="text-3xl font-bold text-white">{{ "{:,}".format(summary.total_requests) }}</p>
+    <p class="text-xs text-gray-500 mt-1">直近 {{ hours }}h</p>
+  </div>
+
+  <!-- エラー数 -->
+  <div class="bg-gray-900 border {% if summary.error_rate > 5 %}border-red-800{% else %}border-gray-800{% endif %} rounded-xl p-5">
+    <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">エラー数</p>
+    <p class="text-3xl font-bold {% if summary.error_rate > 5 %}text-red-400{% else %}text-white{% endif %}">
+      {{ "{:,}".format(summary.error_count) }}
+    </p>
+    <p class="text-xs {% if summary.error_rate > 5 %}text-red-500{% else %}text-gray-500{% endif %} mt-1">
+      エラー率 {{ summary.error_rate }}%
+    </p>
+  </div>
+
+  <!-- 平均レイテンシ -->
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+    <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">平均応答時間</p>
+    <p class="text-3xl font-bold text-white">{{ summary.avg_latency_ms }}<span class="text-base font-normal text-gray-400"> ms</span></p>
+    <p class="text-xs text-gray-500 mt-1">直近 {{ hours }}h</p>
+  </div>
+
+  <!-- パーセンタイルレイテンシ -->
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+    <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">応答時間パーセンタイル</p>
+    <div class="space-y-1 text-sm">
+      <div class="flex justify-between">
+        <span class="text-gray-400">P50</span>
+        <span class="text-white font-mono">{{ summary.p50_latency_ms }} ms</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-400">P95</span>
+        <span class="text-yellow-400 font-mono">{{ summary.p95_latency_ms }} ms</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-gray-400">P99</span>
+        <span class="text-orange-400 font-mono">{{ summary.p99_latency_ms }} ms</span>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ===== チャート行 ===== -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+  <!-- 応答時間分布 -->
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+    <h2 class="text-sm font-semibold text-gray-300 mb-4">応答時間分布（直近 {{ hours }}h）</h2>
+    {% if latency.labels %}
+    <div class="relative h-52">
+      <canvas id="latency-chart"
+        data-labels='{{ latency.labels | tojson }}'
+        data-values='{{ latency.counts | tojson }}'>
+      </canvas>
+    </div>
+    <p class="text-xs text-gray-600 mt-2 text-right">単位: ms</p>
+    {% else %}
+    <div class="flex items-center justify-center h-52 text-gray-600 text-sm">データがありません</div>
+    {% endif %}
+  </div>
+
+  <!-- 精度推移 -->
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+    <h2 class="text-sm font-semibold text-gray-300 mb-4">
+      精度推移（直近 {{ days }} 日）
+      {% if accuracy.metric_name %}
+      <span class="text-xs font-normal text-gray-500 ml-1">— {{ accuracy.metric_name }}</span>
+      {% endif %}
+    </h2>
+    {% if accuracy.labels %}
+    <div class="relative h-52">
+      <canvas id="accuracy-chart"
+        data-labels='{{ accuracy.labels | tojson }}'
+        data-values='{{ accuracy.data | tojson }}'
+        data-metric-name="{{ accuracy.metric_name }}">
+      </canvas>
+    </div>
+    {% else %}
+    <div class="flex items-center justify-center h-52 text-gray-600 text-sm">
+      actual_label が含まれるデータがありません
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- ===== ドリフト検知 ===== -->
+<div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+  <h2 class="text-sm font-semibold text-gray-300 mb-4">ドリフト検知（予測値分布）</h2>
+
+  {% if drift.status == "insufficient_data" %}
+  <div class="flex items-center gap-3 text-yellow-400 text-sm">
+    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+    </svg>
+    {{ drift.message }}
+  </div>
+
+  {% else %}
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+    <!-- 総合判定 -->
+    <div class="flex flex-col items-center justify-center p-4 rounded-lg
+      {% if drift.drift_detected %}bg-red-950 border border-red-800{% else %}bg-emerald-950 border border-emerald-800{% endif %}">
+      {% if drift.drift_detected %}
+      <svg class="w-10 h-10 text-red-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+      </svg>
+      <p class="font-bold text-red-400">ドリフト検出</p>
+      {% else %}
+      <svg class="w-10 h-10 text-emerald-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+      </svg>
+      <p class="font-bold text-emerald-400">正常</p>
+      {% endif %}
+      <p class="text-xs text-gray-500 mt-1 text-center">{{ drift.message }}</p>
+    </div>
+
+    <!-- PSI -->
+    <div class="bg-gray-800 rounded-lg p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">PSI（Population Stability Index）</p>
+      <p class="text-2xl font-bold font-mono
+        {% if drift.psi_level == 'ok' %}text-emerald-400
+        {% elif drift.psi_level == 'warning' %}text-yellow-400
+        {% else %}text-red-400{% endif %}">
+        {{ drift.psi }}
+      </p>
+      <div class="mt-2 flex gap-2 text-xs">
+        <span class="{% if drift.psi_level == 'ok' %}text-emerald-400 font-semibold{% else %}text-gray-600{% endif %}">&lt; 0.1 正常</span>
+        <span class="{% if drift.psi_level == 'warning' %}text-yellow-400 font-semibold{% else %}text-gray-600{% endif %}">0.1–0.25 警告</span>
+        <span class="{% if drift.psi_level == 'alert' %}text-red-400 font-semibold{% else %}text-gray-600{% endif %}">&gt; 0.25 異常</span>
+      </div>
+    </div>
+
+    <!-- KS 検定 -->
+    <div class="bg-gray-800 rounded-lg p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">KS 検定（Kolmogorov-Smirnov）</p>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <span class="text-gray-400">統計量</span>
+          <span class="font-mono text-white">{{ drift.ks_statistic }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-400">p 値</span>
+          <span class="font-mono {% if drift.drift_by_ks %}text-red-400{% else %}text-emerald-400{% endif %}">
+            {{ drift.ks_pvalue }}
+          </span>
+        </div>
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-600">有意水準</span>
+          <span class="text-gray-600">α = 0.05</span>
+        </div>
+      </div>
+      <p class="text-xs mt-3 {% if drift.drift_by_ks %}text-red-400{% else %}text-emerald-400{% endif %}">
+        {% if drift.drift_by_ks %}有意差あり（ドリフト検出）{% else %}有意差なし（正常）{% endif %}
+      </p>
+    </div>
+
+  </div>
+
+  <p class="text-xs text-gray-600 mt-3">
+    参照ウィンドウ: 最古 {{ drift.reference_count }} 件　/　現在ウィンドウ: 最新 {{ drift.current_count }} 件
+  </p>
+  {% endif %}
+</div>
