@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
+
 import numpy as np
 from scipy import stats
 from sqlalchemy.orm import Session
 
-from ..models import InferenceLog
+from ..models import DeployedModel, InferenceLog
 
 
 def _compute_psi(expected: np.ndarray, actual: np.ndarray, bins: int = 10) -> float:
@@ -35,8 +37,7 @@ def detect_drift(
 ) -> dict:
     """
     参照ウィンドウ（最古 window_size 件）と現在ウィンドウ（最新 window_size 件）を
-    KS 検定と PSI で比較してドリフトを検知する。
-    閾値はプロジェクト設定から渡す（未設定時はデフォルト値）。
+    KS 検定と PSI で比較して予測値ドリフトを検知する。
     """
     logs = (
         db.query(InferenceLog)
@@ -44,7 +45,7 @@ def detect_drift(
             InferenceLog.project_id == project_id,
             InferenceLog.is_error == False,  # noqa: E712
         )
-        .order_by(InferenceLog.timestamp)
+        .order_by(InferenceLog.request_timestamp)
         .all()
     )
 
@@ -59,8 +60,8 @@ def detect_drift(
             "drift_detected": False,
         }
 
-    reference = np.array([l.prediction for l in logs[:window_size]])
-    current = np.array([l.prediction for l in logs[-window_size:]])
+    reference = np.array([l.prediction_values for l in logs[:window_size]])
+    current = np.array([l.prediction_values for l in logs[-window_size:]])
 
     ks_stat, ks_pvalue = stats.ks_2samp(reference, current)
     psi = _compute_psi(reference, current)
@@ -83,6 +84,132 @@ def detect_drift(
         "psi_alert": psi_alert,
         "ks_alpha": ks_alpha,
         "message": _build_message(drift_detected, psi_level, psi_warning, psi_alert, ks_pvalue, ks_alpha),
+    }
+
+
+def detect_feature_drift(
+    db: Session,
+    project_id: int,
+    window_size: int = 100,
+    psi_warning: float = 0.10,
+    psi_alert: float = 0.25,
+) -> dict:
+    """
+    m_deployed_models の最新モデルバージョンの特徴量分布と
+    t_inference_logs の最新 window_size 件の特徴量分布を特徴量ごとに PSI で比較する。
+    """
+    # 最新モデルバージョンを取得
+    latest_model = (
+        db.query(DeployedModel)
+        .filter(DeployedModel.project_id == project_id)
+        .order_by(DeployedModel.created_at.desc())
+        .first()
+    )
+
+    if not latest_model:
+        return {
+            "status": "no_model",
+            "message": "デプロイ済みモデルが登録されていません",
+            "features": [],
+            "drift_detected": False,
+            "model_version": None,
+        }
+
+    latest_version = latest_model.model_version
+
+    # 同バージョンの全参照サンプルを取得
+    ref_models = (
+        db.query(DeployedModel)
+        .filter(
+            DeployedModel.project_id == project_id,
+            DeployedModel.model_version == latest_version,
+        )
+        .all()
+    )
+
+    # 特徴量重要度（最新行から取得）
+    feature_importance: dict[str, float] = {}
+    if latest_model.feature_importance:
+        feature_importance = json.loads(latest_model.feature_importance)
+
+    # 参照特徴量サンプルを収集
+    ref_features: list[dict] = []
+    for m in ref_models:
+        if m.feature_values:
+            ref_features.append(json.loads(m.feature_values))
+
+    if not ref_features:
+        return {
+            "status": "no_reference_features",
+            "message": "参照モデルに特徴量データがありません",
+            "features": [],
+            "drift_detected": False,
+            "model_version": latest_version,
+        }
+
+    # 現在ウィンドウ: 最新 window_size 件の推論ログ（feature_values あり）
+    current_logs = (
+        db.query(InferenceLog)
+        .filter(
+            InferenceLog.project_id == project_id,
+            InferenceLog.is_error == False,  # noqa: E712
+            InferenceLog.feature_values != None,  # noqa: E711
+        )
+        .order_by(InferenceLog.request_timestamp.desc())
+        .limit(window_size)
+        .all()
+    )
+
+    if not current_logs:
+        return {
+            "status": "insufficient_data",
+            "message": "特徴量データが含まれる推論ログがありません",
+            "features": [],
+            "drift_detected": False,
+            "model_version": latest_version,
+        }
+
+    current_features = [json.loads(l.feature_values) for l in current_logs]
+
+    feature_names = list(ref_features[0].keys())
+    results = []
+
+    for feat in feature_names:
+        ref_arr = np.array(
+            [f[feat] for f in ref_features if feat in f and f[feat] is not None],
+            dtype=float,
+        )
+        cur_arr = np.array(
+            [f[feat] for f in current_features if feat in f and f[feat] is not None],
+            dtype=float,
+        )
+
+        if len(ref_arr) < 5 or len(cur_arr) < 5:
+            continue
+
+        psi = _compute_psi(ref_arr, cur_arr)
+        importance = feature_importance.get(feat, 0.0)
+        psi_level = "ok" if psi < psi_warning else ("warning" if psi < psi_alert else "alert")
+
+        results.append({
+            "feature": feat,
+            "psi": round(psi, 4),
+            "psi_level": psi_level,
+            "importance": round(float(importance), 4),
+        })
+
+    max_psi = max((r["psi"] for r in results), default=0.0)
+    drift_detected = max_psi >= psi_alert
+
+    return {
+        "status": "ok",
+        "model_version": latest_version,
+        "reference_count": len(ref_features),
+        "current_count": len(current_features),
+        "features": results,
+        "drift_detected": drift_detected,
+        "psi_warning": psi_warning,
+        "psi_alert": psi_alert,
     }
 
 

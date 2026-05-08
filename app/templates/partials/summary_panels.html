@@ -21,7 +21,7 @@
     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
     </svg>
-    <span>{{ r.project.name }}: エラー率 {{ r.summary.error_rate }}%（閾値 5% 超過）</span>
+    <span>{{ r.project.project_name }}: エラー率 {{ r.summary.error_rate }}%（閾値 5% 超過）</span>
   </div>
   {% endfor %}
 </div>
@@ -55,7 +55,7 @@
 
         <!-- プロジェクト名 -->
         <td class="px-5 py-4">
-          <div class="font-semibold text-white">{{ p.name }}</div>
+          <div class="font-semibold text-white">{{ p.project_name }}</div>
           {% if p.description %}
           <div class="text-xs text-gray-500 mt-0.5 truncate max-w-xs">{{ p.description }}</div>
           {% endif %}
@@ -63,10 +63,15 @@
 
         <!-- 種別バッジ -->
         <td class="px-4 py-4">
-          <span class="px-2 py-0.5 rounded text-xs font-medium
-            {% if p.task_type == 'classification' %}bg-indigo-900 text-indigo-300{% else %}bg-teal-900 text-teal-300{% endif %}">
-            {% if p.task_type == 'classification' %}分類{% else %}回帰{% endif %}
-          </span>
+          {% if p.task_type == 'regression' %}
+          <span class="px-2 py-0.5 rounded text-xs font-medium bg-teal-900 text-teal-300">回帰</span>
+          {% elif p.task_type == 'binary' %}
+          <span class="px-2 py-0.5 rounded text-xs font-medium bg-indigo-900 text-indigo-300">二値分類</span>
+          {% elif p.task_type == 'multi-class' %}
+          <span class="px-2 py-0.5 rounded text-xs font-medium bg-violet-900 text-violet-300">多クラス</span>
+          {% else %}
+          <span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-900 text-purple-300">多ラベル</span>
+          {% endif %}
         </td>
 
         <!-- リクエスト数 -->
@@ -102,13 +107,13 @@
         <!-- 精度 / MAE -->
         <td class="px-4 py-4 text-right">
           {% if a.value is not none %}
-          {% if p.task_type == 'classification' %}
+          {% if p.task_type != 'regression' %}
             {% set acc_color = 'text-emerald-400' if a.value >= row.config.accuracy_warning else ('text-yellow-400' if a.value >= row.config.accuracy_alert else 'text-red-400') %}
           {% else %}
             {% set acc_color = 'text-teal-300' if row.config.mae_warning is none else ('text-emerald-400' if a.value < row.config.mae_warning else ('text-yellow-400' if row.config.mae_alert is none or a.value < row.config.mae_alert else 'text-red-400')) %}
           {% endif %}
           <span class="font-mono {{ acc_color }}">
-            {% if p.task_type == 'classification' %}{{ a.value }}%{% else %}{{ a.value }}{% endif %}
+            {% if p.task_type != 'regression' %}{{ a.value }}%{% else %}{{ a.value }}{% endif %}
           </span>
           <div class="text-xs text-gray-600">{{ a.metric_name }} / n={{ a.sample_count }}</div>
           {% else %}
@@ -147,11 +152,11 @@
         <!-- 詳細 / 設定 -->
         <td class="px-4 py-4 text-center">
           <div class="flex items-center justify-center gap-2">
-            <a href="/?project_id={{ p.id }}"
+            <a href="/?project_id={{ p.project_id }}"
               class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline transition-colors whitespace-nowrap">
               詳細 →
             </a>
-            <button onclick="openConfigModal({{ p.id }}, loadSummary)" title="閾値設定"
+            <button onclick="openConfigModal({{ p.project_id }}, loadSummary)" title="閾値設定"
               class="text-gray-600 hover:text-gray-300 transition-colors p-0.5">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

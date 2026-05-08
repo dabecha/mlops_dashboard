@@ -10,7 +10,14 @@
   class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
   onchange="loadPanels()">
   {% for p in projects %}
-  <option value="{{ p.id }}" {% if p.id == initial_project_id %}selected{% endif %}>{{ p.name }}{% if p.task_type == 'classification' %} (分類){% else %} (回帰){% endif %}</option>
+  <option value="{{ p.project_id }}" {% if p.project_id == initial_project_id %}selected{% endif %}>
+    {{ p.project_name }}
+    {% if p.task_type == 'binary' %} (二値分類)
+    {% elif p.task_type == 'multi-class' %} (多クラス分類)
+    {% elif p.task_type == 'multi-label' %} (多ラベル分類)
+    {% else %} (回帰)
+    {% endif %}
+  </option>
   {% endfor %}
 </select>
 
@@ -95,13 +102,12 @@
     const projectId = document.getElementById('project-select')?.value;
     const hours = document.getElementById('hours-select')?.value ?? '24';
     if (!projectId) return;
-    // hidden フォームを同期
     document.getElementById('project-id-hidden').value = projectId;
     document.getElementById('hours-hidden').value = hours;
     htmx.ajax('GET', '/ui/panels', {
       target: '#dashboard-content',
       indicator: '#loading-indicator',
-      values: { project_id: projectId, hours: hours, days: 7, drift_window: 100 }
+      values: { project_id: projectId, hours: hours, days: 7 }
     });
   }
 
@@ -110,6 +116,7 @@
   function initAllCharts() {
     initBarChart('latency-chart');
     initLineChart('accuracy-chart');
+    initFeatureDriftChart('feature-drift-chart');
   }
 
   function initBarChart(id) {
@@ -151,9 +158,7 @@
     const values   = JSON.parse(el.dataset.values || '[]');
     const warnVal  = el.dataset.thresholdWarning !== '' ? parseFloat(el.dataset.thresholdWarning) : null;
     const alertVal = el.dataset.thresholdAlert   !== '' ? parseFloat(el.dataset.thresholdAlert)   : null;
-    const taskType = el.dataset.taskType || 'classification';
 
-    // 閾値線: 分類は「以下が悪い」、回帰は「以上が悪い」ので線の色を統一
     const datasets = [{
       label: el.dataset.metricName || '値',
       data: values,
@@ -195,6 +200,101 @@
         scales: {
           x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: '#1f2937' } },
           y: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } }
+        }
+      }
+    });
+  }
+
+  function initFeatureDriftChart(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const existing = Chart.getChart(el);
+    if (existing) existing.destroy();
+
+    const features = JSON.parse(el.dataset.features || '[]');
+    if (!features.length) return;
+
+    const psiWarning = parseFloat(el.dataset.psiWarning || '0.1');
+    const psiAlert   = parseFloat(el.dataset.psiAlert   || '0.25');
+
+    const pointColors = features.map(f => {
+      if (f.psi >= psiAlert)   return 'rgba(248, 113, 113, 0.85)';
+      if (f.psi >= psiWarning) return 'rgba(251, 191, 36, 0.85)';
+      return 'rgba(52, 211, 153, 0.85)';
+    });
+
+    // PSI 閾値ラインを線グラフとして重ねる
+    const maxImportance = Math.max(...features.map(f => f.importance), 0.1);
+    const lineX = [0, maxImportance * 1.1];
+
+    new Chart(el, {
+      type: 'scatter',
+      data: {
+        datasets: [
+          {
+            label: '特徴量',
+            data: features.map(f => ({ x: f.importance, y: f.psi, label: f.feature })),
+            backgroundColor: pointColors,
+            borderColor: pointColors.map(c => c.replace('0.85', '1')),
+            borderWidth: 1,
+            pointRadius: 8,
+            pointHoverRadius: 10,
+          },
+          {
+            label: `警告 (PSI=${psiWarning})`,
+            type: 'line',
+            data: lineX.map(x => ({ x, y: psiWarning })),
+            borderColor: 'rgba(251, 191, 36, 0.6)',
+            borderWidth: 1.5,
+            borderDash: [5, 4],
+            pointRadius: 0,
+            fill: false,
+          },
+          {
+            label: `異常 (PSI=${psiAlert})`,
+            type: 'line',
+            data: lineX.map(x => ({ x, y: psiAlert })),
+            borderColor: 'rgba(248, 113, 113, 0.6)',
+            borderWidth: 1.5,
+            borderDash: [5, 4],
+            pointRadius: 0,
+            fill: false,
+          },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            labels: { color: '#9ca3af', boxWidth: 16, font: { size: 11 } }
+          },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                if (ctx.datasetIndex === 0) {
+                  const d = ctx.raw;
+                  return [`${d.label}`, `PSI: ${d.y}`, `重要度: ${d.x}`];
+                }
+                return ctx.dataset.label;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: '重要度 (Importance)', color: '#6b7280', font: { size: 11 } },
+            ticks: { color: '#9ca3af' },
+            grid: { color: '#1f2937' },
+            min: 0,
+          },
+          y: {
+            title: { display: true, text: 'PSI', color: '#6b7280', font: { size: 11 } },
+            ticks: { color: '#9ca3af' },
+            grid: { color: '#1f2937' },
+            min: 0,
+          }
         }
       }
     });

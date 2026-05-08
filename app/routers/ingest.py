@@ -7,8 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import InferenceLog, Project, ProjectConfig
+from ..models import DeployedModel, InferenceLog, Project, ProjectConfig
 from ..schemas import (
+    DeployedModelCreate,
+    DeployedModelResponse,
     InferenceLogCreate,
     InferenceLogResponse,
     ProjectConfigResponse,
@@ -23,7 +25,7 @@ router = APIRouter(prefix="/api", tags=["ingest"])
 
 @router.post("/projects", response_model=ProjectResponse, status_code=201)
 def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
-    if db.query(Project).filter(Project.name == body.name).first():
+    if db.query(Project).filter(Project.project_name == body.project_name).first():
         raise HTTPException(status_code=400, detail="同名のプロジェクトが既に存在します")
     project = Project(**body.model_dump())
     db.add(project)
@@ -46,6 +48,28 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
+@router.post("/projects/{project_id}/models", response_model=DeployedModelResponse, status_code=201)
+def register_deployed_model(
+    project_id: int,
+    body: DeployedModelCreate,
+    db: Session = Depends(get_db),
+):
+    if not db.get(Project, project_id):
+        raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+    model = DeployedModel(
+        project_id=project_id,
+        model_version=body.model_version,
+        feature_values=json.dumps(body.feature_values) if body.feature_values else None,
+        feature_dtypes=json.dumps(body.feature_dtypes) if body.feature_dtypes else None,
+        feature_importance=json.dumps(body.feature_importance) if body.feature_importance else None,
+        actual_values=body.actual_values,
+    )
+    db.add(model)
+    db.commit()
+    db.refresh(model)
+    return model
+
+
 @router.get("/projects/{project_id}/config", response_model=ProjectConfigResponse)
 def get_config(project_id: int, db: Session = Depends(get_db)):
     if not db.get(Project, project_id):
@@ -53,7 +77,6 @@ def get_config(project_id: int, db: Session = Depends(get_db)):
     cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
     if cfg:
         return cfg
-    # 未設定時はデフォルト値を返す（DB に保存はしない）
     return ProjectConfigResponse(project_id=project_id, updated_at=datetime.utcnow(), **DEFAULTS)
 
 
@@ -76,23 +99,23 @@ def upsert_config(project_id: int, body: ProjectConfigUpdate, db: Session = Depe
 
 @router.post("/infer", response_model=InferenceLogResponse, status_code=201)
 def log_inference(body: InferenceLogCreate, db: Session = Depends(get_db)):
-    project = db.query(Project).filter(Project.name == body.project_name).first()
+    project = db.query(Project).filter(Project.project_name == body.project_name).first()
     if not project:
         raise HTTPException(
             status_code=404, detail=f"プロジェクト '{body.project_name}' が見つかりません"
         )
 
     log = InferenceLog(
-        project_id=project.id,
-        timestamp=body.timestamp or datetime.utcnow(),
+        project_id=project.project_id,
+        request_timestamp=body.request_timestamp or datetime.utcnow(),
         request_id=body.request_id,
-        prediction=body.prediction,
-        actual_label=body.actual_label,
-        confidence=body.confidence,
+        model_id=body.model_id,
+        prediction_values=body.prediction_values,
+        actual_values=body.actual_values,
         response_time_ms=body.response_time_ms,
         is_error=body.is_error,
-        error_message=body.error_message,
         feature_values=json.dumps(body.feature_values) if body.feature_values else None,
+        feature_dtypes=json.dumps(body.feature_dtypes) if body.feature_dtypes else None,
     )
     db.add(log)
     db.commit()

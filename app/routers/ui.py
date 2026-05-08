@@ -26,7 +26,7 @@ async def index(
     db: Session = Depends(get_db),
 ):
     projects = db.query(Project).order_by(Project.created_at).all()
-    initial_project_id = project_id or (projects[0].id if projects else None)
+    initial_project_id = project_id or (projects[0].project_id if projects else None)
     return templates.TemplateResponse(
         request, "index.html", {"projects": projects, "initial_project_id": initial_project_id}
     )
@@ -47,11 +47,11 @@ async def summary_panels(
     projects = db.query(Project).order_by(Project.created_at).all()
     rows = []
     for p in projects:
-        cfg = config_svc.get_config(db, p.id)
-        summary = metrics_svc.get_summary(db, p.id, hours)
-        accuracy = metrics_svc.get_latest_accuracy(db, p.id, hours=168, task_type=p.task_type)
+        cfg = config_svc.get_config(db, p.project_id)
+        summary = metrics_svc.get_summary(db, p.project_id, hours)
+        accuracy = metrics_svc.get_latest_accuracy(db, p.project_id, hours=168, task_type=p.task_type)
         drift = drift_svc.detect_drift(
-            db, p.id,
+            db, p.project_id,
             window_size=cfg["drift_window_size"],
             psi_warning=cfg["psi_warning"],
             psi_alert=cfg["psi_alert"],
@@ -89,6 +89,12 @@ async def all_panels(
         psi_alert=cfg["psi_alert"],
         ks_alpha=cfg["ks_alpha"],
     )
+    feature_drift = drift_svc.detect_feature_drift(
+        db, project_id,
+        window_size=cfg["drift_window_size"],
+        psi_warning=cfg["psi_warning"],
+        psi_alert=cfg["psi_alert"],
+    )
 
     return templates.TemplateResponse(
         request,
@@ -99,6 +105,7 @@ async def all_panels(
             "latency": latency,
             "accuracy": accuracy,
             "drift": drift,
+            "feature_drift": feature_drift,
             "config": cfg,
             "hours": hours,
             "days": days,

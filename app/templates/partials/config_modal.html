@@ -1,14 +1,19 @@
-<form id="config-form" onsubmit="handleConfigSave(event, {{ project.id }})">
+<form id="config-form" onsubmit="handleConfigSave(event, {{ project.project_id }})">
 
   <!-- モーダルヘッダー -->
   <div class="flex items-center justify-between px-6 py-4 border-b border-gray-800">
     <div>
       <h3 class="text-base font-semibold text-white">閾値設定</h3>
-      <p class="text-xs text-gray-500 mt-0.5">{{ project.name }}
-        <span class="ml-1 px-1.5 py-0.5 rounded text-xs
-          {% if project.task_type == 'classification' %}bg-indigo-900 text-indigo-300{% else %}bg-teal-900 text-teal-300{% endif %}">
-          {% if project.task_type == 'classification' %}分類{% else %}回帰{% endif %}
-        </span>
+      <p class="text-xs text-gray-500 mt-0.5">{{ project.project_name }}
+        {% if project.task_type == 'regression' %}
+        <span class="ml-1 px-1.5 py-0.5 rounded text-xs bg-teal-900 text-teal-300">回帰</span>
+        {% elif project.task_type == 'binary' %}
+        <span class="ml-1 px-1.5 py-0.5 rounded text-xs bg-indigo-900 text-indigo-300">二値分類</span>
+        {% elif project.task_type == 'multi-class' %}
+        <span class="ml-1 px-1.5 py-0.5 rounded text-xs bg-violet-900 text-violet-300">多クラス分類</span>
+        {% else %}
+        <span class="ml-1 px-1.5 py-0.5 rounded text-xs bg-purple-900 text-purple-300">多ラベル分類</span>
+        {% endif %}
       </p>
     </div>
     <button type="button" onclick="document.getElementById('config-dialog').close()"
@@ -86,7 +91,7 @@
         精度アラート
       </h4>
 
-      {% if project.task_type == 'classification' %}
+      {% if project.task_type != 'regression' %}
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-xs text-gray-400 mb-1">

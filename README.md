@@ -34,78 +34,101 @@ SQLite ファイル。アプリ起動時に自動生成されます（`mlops.db`
 ### テーブル一覧
 
 ```
-projects
-inference_logs
+m_projects
+t_inference_logs
+t_deployed_models
 ```
 
 ---
 
-### `projects` テーブル
+### `m_projects` テーブル
 
 ML プロジェクトのマスターテーブル。
 
 | カラム | 型 | NULL | デフォルト | 説明 |
 |---|---|---|---|---|
-| `id` | INTEGER | NO | auto | 主キー |
-| `name` | VARCHAR(100) | NO | — | プロジェクト名（ユニーク） |
+| `project_id` | INTEGER | NO | auto | 主キー |
+| `project_name` | VARCHAR(100) | NO | — | プロジェクト名（ユニーク） |
 | `description` | VARCHAR(500) | YES | NULL | 説明文 |
-| `task_type` | VARCHAR(20) | NO | `classification` | タスク種別。`classification` または `regression` |
+| `task_type` | VARCHAR(20) | NO | NULL | タスク種別。二値分類: `binary`, 多ラベル分類: `multi-label`, 多クラス分類: `multi-class`, 回帰: `regression` |
 | `created_at` | DATETIME | NO | 現在時刻 | 登録日時（UTC） |
 
 **インデックス:** `id`（主キー）、`name`（ユニーク）
 
 ---
 
-### `inference_logs` テーブル
+### `t_inference_logs` テーブル
 
 ML モデルの推論リクエスト・結果ログ。1 リクエストにつき 1 レコードを記録します。
 
 | カラム | 型 | NULL | デフォルト | 説明 |
 |---|---|---|---|---|
-| `id` | INTEGER | NO | auto | 主キー |
-| `project_id` | INTEGER | NO | — | `projects.id` への外部キー |
-| `timestamp` | DATETIME | NO | 現在時刻 | 推論実行日時（UTC） |
+| `log_id` | INTEGER | NO | auto | 主キー |
+| `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー |
+| `request_timestamp` | DATETIME | NO | 現在時刻 | 推論実行日時（UTC） |
 | `request_id` | VARCHAR(100) | YES | NULL | 呼び出し元が付与するリクエスト識別子 |
-| `prediction` | REAL | NO | — | モデルの予測値（分類: 確率 0–1、回帰: 数値） |
-| `actual_label` | REAL | YES | NULL | 正解ラベル。遅延ラベリングで後から投入可 |
-| `confidence` | REAL | YES | NULL | モデルの予測信頼度（0–1） |
+| `model_id` | VARCHAR(100) | YES | NULL | `m_deployed_model.model_id` への外部キー |
+| `prediction_values` | REAL | NO | — | モデルの予測値（分類: 確率 0–1、回帰: 数値） |
+| `actual_values` | REAL | YES | NULL | 正解ラベル。遅延ラベリングで後から投入可 |
 | `response_time_ms` | REAL | NO | — | 推論にかかった応答時間（ミリ秒） |
 | `is_error` | BOOLEAN | NO | `false` | エラー発生フラグ |
-| `error_message` | TEXT | YES | NULL | エラー内容（`is_error=true` のときのみ使用） |
 | `feature_values` | TEXT | YES | NULL | 入力特徴量の JSON 文字列（例: `{"age": 35.0, "amount": 5200.0}`） |
+| `feature_dtypes` | TEXT | YES | NULL | 入力特徴量のデータ型の JSON 文字列（例: `{"age": "uint8", "amount": "uint8"}`） |
 
-**インデックス:** `id`（主キー）、`project_id`、`timestamp`
+**インデックス:** `id`（主キー）、`project_id`、`model_id`、`request_timestamp`
 
-**リレーション:** `project_id` → `projects.id`（カスケード削除）
+**リレーション:** `project_id` → `m_projects.project_id`（カスケード削除）、`model_id` → `m_deployed_models.model_id`（カスケード削除）
+
+---
+
+### `m_deployed_models` テーブル
+
+デプロイされたML モデル。プロジェクト毎にモデルが更新される毎に追記します。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| `model_id` | INTEGER | NO | auto | 主キー |
+| `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー |
+| `model_version` | VARCHAR(100) | YES | NULL | 推論に利用されたモデルのバージョン |
+| `feature_values` | TEXT | YES | NULL | 学習時の入力特徴量の JSON 文字列（例: `{"age": 35.0, "amount": 5200.0}`） |
+| `feature_dtypes` | TEXT | YES | NULL | 学習時の入力特徴量のデータ型の JSON 文字列（例: `{"age": "uint8", "amount": "uint8"}`） |
+| `feature_importance` | TEXT | YES | NULL | 学習時の入力特徴量重要度の JSON 文字列（例: `{"age": 0.43, "amount": 0.21}`） |
+| `actual_values` | REAL | YES | NULL | 学習時の正解データ |
+| `created_at` | DATETIME | NO | 現在時刻 | 登録日時（UTC） |
+
+**インデックス:** `model_id`（主キー）、`project_id`、`created_at`
+
+**リレーション:** `project_id` → `m_projects.project_id`（カスケード削除）
+
 
 ---
 
 ### ER 図
 
 ```
-projects
+m_projects
 ─────────────────────────────
-PK  id          INTEGER
-    name        VARCHAR(100)  UNIQUE
-    description VARCHAR(500)
-    task_type   VARCHAR(20)   -- 'classification' | 'regression'
-    created_at  DATETIME
+PK  project_id    INTEGER
+    project_name  VARCHAR(100)  UNIQUE
+    description   VARCHAR(500)
+    task_type     VARCHAR(20)   -- binary | multi-class | multi-label | regression
+    created_at    DATETIME
          │
-         │ 1 : N
-         ▼
-inference_logs
-─────────────────────────────
-PK  id               INTEGER
-FK  project_id       INTEGER   → projects.id
-    timestamp        DATETIME
-    request_id       VARCHAR(100)
-    prediction       REAL        -- 必須
-    actual_label     REAL        -- 任意（遅延ラベリング対応）
-    confidence       REAL        -- 任意
-    response_time_ms REAL        -- 必須
-    is_error         BOOLEAN
-    error_message    TEXT
-    feature_values   TEXT        -- JSON
+         │ 1 : N                    │ 1 : N
+         ▼                          ▼
+t_inference_logs             m_deployed_models
+─────────────────────────    ─────────────────────────────
+PK  log_id            INTEGER    PK  model_id         INTEGER
+FK  project_id        INTEGER    FK  project_id       INTEGER   → m_projects.project_id
+    request_timestamp DATETIME       model_version    VARCHAR(100)
+    request_id        VARCHAR(100)   feature_values   TEXT        -- JSON (1サンプル)
+FK  model_id          INTEGER    → m_deployed_models.model_id
+    prediction_values REAL           feature_dtypes   TEXT        -- JSON
+    actual_values     REAL           feature_importance TEXT       -- JSON
+    response_time_ms  REAL           actual_values    REAL
+    is_error          BOOLEAN        created_at       DATETIME
+    feature_values    TEXT        -- JSON
+    feature_dtypes    TEXT        -- JSON
 ```
 
 ---
@@ -121,9 +144,26 @@ POST /api/projects
 Content-Type: application/json
 
 {
-  "name": "fraud-detection",
+  "project_name": "fraud-detection",
   "description": "クレジットカード不正検知モデル",
-  "task_type": "classification"   # "classification" | "regression"
+  "task_type": "binary"   # "binary" | "multi-class" | "multi-label" | "regression"
+}
+```
+
+### デプロイ済みモデル登録（特徴量ドリフトの参照データ）
+
+```bash
+POST /api/projects/{project_id}/models
+Content-Type: application/json
+
+# 学習データの1サンプルを1リクエストで送信。複数回呼び出すことで参照分布を構築する。
+{
+  "project_id": 1,
+  "model_version": "v1.2.0",
+  "feature_values": {"age": 35.0, "amount": 5200.0},     # 任意: 学習サンプル
+  "feature_dtypes": {"age": "float32", "amount": "float32"},  # 任意
+  "feature_importance": {"age": 0.43, "amount": 0.57},   # 任意: 特徴量重要度
+  "actual_values": 1.0                                    # 任意: 正解ラベル
 }
 ```
 
@@ -134,19 +174,16 @@ POST /api/infer
 Content-Type: application/json
 
 {
-  "project_name": "fraud-detection",    # 必須
-  "prediction": 0.82,                   # 必須: モデル出力値
-  "response_time_ms": 130.5,            # 必須: 応答時間 (ms)
-  "request_id": "req-00001",            # 任意
-  "actual_label": 1.0,                  # 任意: 正解ラベル
-  "confidence": 0.91,                   # 任意: 予測信頼度
-  "is_error": false,                    # 任意: エラーフラグ
-  "error_message": null,                # 任意: エラー内容
-  "timestamp": "2026-05-08T12:00:00",  # 任意: 省略時はサーバー時刻
-  "feature_values": {                   # 任意: 入力特徴量
-    "age": 35.0,
-    "amount": 5200.0
-  }
+  "project_name": "fraud-detection",         # 必須
+  "prediction_values": 0.82,                 # 必須: モデル出力値
+  "response_time_ms": 130.5,                 # 必須: 応答時間 (ms)
+  "request_id": "req-00001",                 # 任意
+  "model_id": 1,                             # 任意: m_deployed_models.model_id
+  "actual_values": 1.0,                      # 任意: 正解ラベル（遅延ラベリング対応）
+  "is_error": false,                         # 任意: エラーフラグ
+  "request_timestamp": "2026-05-08T12:00:00", # 任意: 省略時はサーバー時刻
+  "feature_values": {"age": 35.0, "amount": 5200.0},  # 任意: 入力特徴量
+  "feature_dtypes": {"age": "float32", "amount": "float32"}  # 任意
 }
 ```
 
@@ -155,7 +192,9 @@ Content-Type: application/json
 | メソッド | パス | 説明 |
 |---|---|---|
 | GET | `/api/projects` | プロジェクト一覧取得 |
-| DELETE | `/api/projects/{id}` | プロジェクト削除（ログも連鎖削除） |
+| DELETE | `/api/projects/{project_id}` | プロジェクト削除（ログも連鎖削除） |
+| GET | `/api/projects/{project_id}/config` | 閾値設定取得 |
+| PUT | `/api/projects/{project_id}/config` | 閾値設定更新 |
 
 ---
 

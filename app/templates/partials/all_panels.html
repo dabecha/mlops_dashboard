@@ -80,23 +80,23 @@
         data-labels='{{ accuracy.labels | tojson }}'
         data-values='{{ accuracy.data | tojson }}'
         data-metric-name="{{ accuracy.metric_name }}"
-        data-threshold-warning="{{ config.accuracy_warning if project.task_type == 'classification' else (config.mae_warning or '') }}"
-        data-threshold-alert="{{ config.accuracy_alert if project.task_type == 'classification' else (config.mae_alert or '') }}"
+        data-threshold-warning="{{ config.accuracy_warning if project.task_type != 'regression' else (config.mae_warning or '') }}"
+        data-threshold-alert="{{ config.accuracy_alert if project.task_type != 'regression' else (config.mae_alert or '') }}"
         data-task-type="{{ project.task_type }}">
       </canvas>
     </div>
     {% else %}
     <div class="flex items-center justify-center h-52 text-gray-600 text-sm">
-      actual_label が含まれるデータがありません
+      actual_values が含まれるデータがありません
     </div>
     {% endif %}
   </div>
 
 </div>
 
-<!-- ===== ドリフト検知 ===== -->
-<div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-  <h2 class="text-sm font-semibold text-gray-300 mb-4">ドリフト検知（予測値分布）</h2>
+<!-- ===== 予測値ドリフト検知 ===== -->
+<div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
+  <h2 class="text-sm font-semibold text-gray-300 mb-4">予測値ドリフト検知（参照ウィンドウ vs 最新ウィンドウ）</h2>
 
   {% if drift.status == "insufficient_data" %}
   <div class="flex items-center gap-3 text-yellow-400 text-sm">
@@ -173,5 +173,86 @@
   <p class="text-xs text-gray-600 mt-3">
     参照ウィンドウ: 最古 {{ drift.reference_count }} 件　/　現在ウィンドウ: 最新 {{ drift.current_count }} 件
   </p>
+  {% endif %}
+</div>
+
+<!-- ===== 特徴量ドリフト ===== -->
+<div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+  <h2 class="text-sm font-semibold text-gray-300 mb-1">特徴量ドリフト（デプロイモデル参照分布 vs 最新推論）</h2>
+  {% if feature_drift.model_version %}
+  <p class="text-xs text-gray-600 mb-4">モデルバージョン: {{ feature_drift.model_version }}　/ 参照 {{ feature_drift.reference_count }} 件 vs 現在 {{ feature_drift.current_count }} 件</p>
+  {% endif %}
+
+  {% if feature_drift.status == "no_model" or feature_drift.status == "no_reference_features" or feature_drift.status == "insufficient_data" %}
+  <div class="flex items-center gap-3 text-yellow-400 text-sm">
+    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+    </svg>
+    {{ feature_drift.message }}
+  </div>
+
+  {% elif feature_drift.features %}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- 散布図: x=重要度, y=PSI -->
+    <div>
+      <p class="text-xs text-gray-500 mb-3">x軸: 重要度（Importance）　y軸: PSI（ドリフト値）</p>
+      <div class="relative h-64">
+        <canvas id="feature-drift-chart"
+          data-features='{{ feature_drift.features | tojson }}'
+          data-psi-warning="{{ feature_drift.psi_warning }}"
+          data-psi-alert="{{ feature_drift.psi_alert }}">
+        </canvas>
+      </div>
+      <div class="mt-2 flex gap-4 text-xs text-gray-600">
+        <span><span class="text-emerald-400">●</span> PSI &lt; {{ feature_drift.psi_warning }} 正常</span>
+        <span><span class="text-yellow-400">●</span> {{ feature_drift.psi_warning }}–{{ feature_drift.psi_alert }} 警告</span>
+        <span><span class="text-red-400">●</span> &gt; {{ feature_drift.psi_alert }} 異常</span>
+      </div>
+    </div>
+
+    <!-- 特徴量ごとの PSI テーブル -->
+    <div class="overflow-y-auto max-h-72">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="text-gray-500 uppercase tracking-wider border-b border-gray-800">
+            <th class="text-left py-2 pr-4">特徴量</th>
+            <th class="text-right py-2 pr-4">PSI</th>
+            <th class="text-right py-2 pr-4">重要度</th>
+            <th class="text-center py-2">状態</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-800">
+          {% for f in feature_drift.features | sort(attribute='psi', reverse=true) %}
+          <tr>
+            <td class="py-2 pr-4 text-gray-300 font-mono">{{ f.feature }}</td>
+            <td class="py-2 pr-4 text-right font-mono
+              {% if f.psi_level == 'alert' %}text-red-400
+              {% elif f.psi_level == 'warning' %}text-yellow-400
+              {% else %}text-emerald-400{% endif %}">
+              {{ f.psi }}
+            </td>
+            <td class="py-2 pr-4 text-right text-gray-400 font-mono">{{ f.importance }}</td>
+            <td class="py-2 text-center">
+              {% if f.psi_level == 'alert' %}
+              <span class="px-1.5 py-0.5 rounded text-xs bg-red-900/60 text-red-300">異常</span>
+              {% elif f.psi_level == 'warning' %}
+              <span class="px-1.5 py-0.5 rounded text-xs bg-yellow-900/60 text-yellow-300">警告</span>
+              {% else %}
+              <span class="px-1.5 py-0.5 rounded text-xs bg-emerald-900/60 text-emerald-300">正常</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% else %}
+  <div class="flex items-center justify-center h-32 text-gray-600 text-sm">
+    特徴量データがありません
+  </div>
   {% endif %}
 </div>
