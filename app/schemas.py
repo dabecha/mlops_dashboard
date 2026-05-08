@@ -35,6 +35,24 @@ class InferenceLogCreate(BaseModel):
     timestamp: Optional[datetime] = None
 
 
+class ProjectConfigUpdate(BaseModel):
+    drift_window_size: int = Field(100, ge=10, le=10000)
+    psi_warning: float = Field(0.10, ge=0.0, le=1.0)
+    psi_alert: float = Field(0.25, ge=0.0, le=2.0)
+    ks_alpha: float = Field(0.05, ge=0.0, le=1.0)
+    accuracy_warning: float = Field(75.0, ge=0.0, le=100.0)
+    accuracy_alert: float = Field(60.0, ge=0.0, le=100.0)
+    mae_warning: Optional[float] = None
+    mae_alert: Optional[float] = None
+
+
+class ProjectConfigResponse(ProjectConfigUpdate):
+    project_id: int
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class InferenceLogResponse(BaseModel):
     id: int
     project_id: int

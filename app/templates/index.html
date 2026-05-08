@@ -24,6 +24,18 @@
   <option value="168">直近 7 日間</option>
 </select>
 
+<button type="button"
+  onclick="openConfigModal(document.getElementById('project-select').value, loadPanels)"
+  title="閾値設定"
+  class="flex items-center gap-1.5 border border-gray-700 hover:border-gray-500 text-gray-400 hover:text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+  </svg>
+  閾値設定
+</button>
+
 <button type="button" onclick="loadPanels()"
   class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -134,25 +146,52 @@
     if (!el) return;
     const existing = Chart.getChart(el);
     if (existing) existing.destroy();
+
+    const labels   = JSON.parse(el.dataset.labels || '[]');
+    const values   = JSON.parse(el.dataset.values || '[]');
+    const warnVal  = el.dataset.thresholdWarning !== '' ? parseFloat(el.dataset.thresholdWarning) : null;
+    const alertVal = el.dataset.thresholdAlert   !== '' ? parseFloat(el.dataset.thresholdAlert)   : null;
+    const taskType = el.dataset.taskType || 'classification';
+
+    // 閾値線: 分類は「以下が悪い」、回帰は「以上が悪い」ので線の色を統一
+    const datasets = [{
+      label: el.dataset.metricName || '値',
+      data: values,
+      borderColor: 'rgba(52, 211, 153, 1)',
+      backgroundColor: 'rgba(52, 211, 153, 0.1)',
+      borderWidth: 2,
+      pointRadius: 4,
+      pointBackgroundColor: 'rgba(52, 211, 153, 1)',
+      fill: true,
+      tension: 0.3,
+    }];
+    if (warnVal !== null) datasets.push({
+      label: '警告閾値',
+      data: labels.map(() => warnVal),
+      borderColor: 'rgba(251,191,36,0.7)',
+      borderWidth: 1.5,
+      borderDash: [5, 4],
+      pointRadius: 0,
+      fill: false,
+    });
+    if (alertVal !== null) datasets.push({
+      label: 'アラート閾値',
+      data: labels.map(() => alertVal),
+      borderColor: 'rgba(248,113,113,0.7)',
+      borderWidth: 1.5,
+      borderDash: [5, 4],
+      pointRadius: 0,
+      fill: false,
+    });
+
     new Chart(el, {
       type: 'line',
-      data: {
-        labels: JSON.parse(el.dataset.labels || '[]'),
-        datasets: [{
-          label: el.dataset.metricName || '値',
-          data: JSON.parse(el.dataset.values || '[]'),
-          borderColor: 'rgba(52, 211, 153, 1)',
-          backgroundColor: 'rgba(52, 211, 153, 0.1)',
-          borderWidth: 2,
-          pointRadius: 4,
-          pointBackgroundColor: 'rgba(52, 211, 153, 1)',
-          fill: true,
-          tension: 0.3,
-        }]
-      },
+      data: { labels, datasets },
       options: {
         responsive: true,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: datasets.length > 1, labels: { color: '#9ca3af', boxWidth: 20, font: { size: 11 } } }
+        },
         scales: {
           x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: '#1f2937' } },
           y: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } }

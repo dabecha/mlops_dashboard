@@ -7,8 +7,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import InferenceLog, Project
-from ..schemas import InferenceLogCreate, InferenceLogResponse, ProjectCreate, ProjectResponse
+from ..models import InferenceLog, Project, ProjectConfig
+from ..schemas import (
+    InferenceLogCreate,
+    InferenceLogResponse,
+    ProjectConfigResponse,
+    ProjectConfigUpdate,
+    ProjectCreate,
+    ProjectResponse,
+)
+from ..services.config import DEFAULTS
 
 router = APIRouter(prefix="/api", tags=["ingest"])
 
@@ -36,6 +44,34 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
     db.delete(project)
     db.commit()
+
+
+@router.get("/projects/{project_id}/config", response_model=ProjectConfigResponse)
+def get_config(project_id: int, db: Session = Depends(get_db)):
+    if not db.get(Project, project_id):
+        raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+    cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
+    if cfg:
+        return cfg
+    # 未設定時はデフォルト値を返す（DB に保存はしない）
+    return ProjectConfigResponse(project_id=project_id, updated_at=datetime.utcnow(), **DEFAULTS)
+
+
+@router.put("/projects/{project_id}/config", response_model=ProjectConfigResponse)
+def upsert_config(project_id: int, body: ProjectConfigUpdate, db: Session = Depends(get_db)):
+    if not db.get(Project, project_id):
+        raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+    cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
+    if cfg:
+        for k, v in body.model_dump().items():
+            setattr(cfg, k, v)
+        cfg.updated_at = datetime.utcnow()
+    else:
+        cfg = ProjectConfig(project_id=project_id, updated_at=datetime.utcnow(), **body.model_dump())
+        db.add(cfg)
+    db.commit()
+    db.refresh(cfg)
+    return cfg
 
 
 @router.post("/infer", response_model=InferenceLogResponse, status_code=201)

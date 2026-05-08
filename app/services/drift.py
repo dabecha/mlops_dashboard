@@ -25,10 +25,18 @@ def _compute_psi(expected: np.ndarray, actual: np.ndarray, bins: int = 10) -> fl
     return float(np.sum((act_pct - exp_pct) * np.log(act_pct / exp_pct)))
 
 
-def detect_drift(db: Session, project_id: int, window_size: int = 100) -> dict:
+def detect_drift(
+    db: Session,
+    project_id: int,
+    window_size: int = 100,
+    psi_warning: float = 0.10,
+    psi_alert: float = 0.25,
+    ks_alpha: float = 0.05,
+) -> dict:
     """
     参照ウィンドウ（最古 window_size 件）と現在ウィンドウ（最新 window_size 件）を
     KS 検定と PSI で比較してドリフトを検知する。
+    閾値はプロジェクト設定から渡す（未設定時はデフォルト値）。
     """
     logs = (
         db.query(InferenceLog)
@@ -57,9 +65,8 @@ def detect_drift(db: Session, project_id: int, window_size: int = 100) -> dict:
     ks_stat, ks_pvalue = stats.ks_2samp(reference, current)
     psi = _compute_psi(reference, current)
 
-    # PSI 判定: <0.1 正常、0.1–0.25 警告、>0.25 異常
-    psi_level = "ok" if psi < 0.1 else ("warning" if psi < 0.25 else "alert")
-    drift_by_ks = ks_pvalue < 0.05
+    psi_level = "ok" if psi < psi_warning else ("warning" if psi < psi_alert else "alert")
+    drift_by_ks = ks_pvalue < ks_alpha
     drift_detected = drift_by_ks or psi_level == "alert"
 
     return {
@@ -72,18 +79,28 @@ def detect_drift(db: Session, project_id: int, window_size: int = 100) -> dict:
         "drift_detected": drift_detected,
         "reference_count": window_size,
         "current_count": window_size,
-        "message": _build_message(drift_detected, psi_level, ks_pvalue),
+        "psi_warning": psi_warning,
+        "psi_alert": psi_alert,
+        "ks_alpha": ks_alpha,
+        "message": _build_message(drift_detected, psi_level, psi_warning, psi_alert, ks_pvalue, ks_alpha),
     }
 
 
-def _build_message(drift_detected: bool, psi_level: str, ks_pvalue: float) -> str:
+def _build_message(
+    drift_detected: bool,
+    psi_level: str,
+    psi_warning: float,
+    psi_alert: float,
+    ks_pvalue: float,
+    ks_alpha: float,
+) -> str:
     if not drift_detected:
         return "ドリフトは検出されていません"
     parts = []
     if psi_level == "alert":
-        parts.append("PSI > 0.25: 分布が大幅に変化しています")
+        parts.append(f"PSI > {psi_alert}: 分布が大幅に変化しています")
     elif psi_level == "warning":
-        parts.append("PSI 0.1–0.25: 軽微な分布変化を検出")
-    if ks_pvalue < 0.05:
+        parts.append(f"PSI {psi_warning}–{psi_alert}: 軽微な分布変化を検出")
+    if ks_pvalue < ks_alpha:
         parts.append(f"KS 検定: p = {ks_pvalue:.4f}（有意差あり）")
     return "　".join(parts)

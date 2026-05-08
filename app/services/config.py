@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+from sqlalchemy.orm import Session
+
+from ..models import ProjectConfig
+
+# システムデフォルト値
+DEFAULTS: dict = {
+    "drift_window_size": 100,
+    "psi_warning": 0.10,
+    "psi_alert": 0.25,
+    "ks_alpha": 0.05,
+    "accuracy_warning": 75.0,
+    "accuracy_alert": 60.0,
+    "mae_warning": None,
+    "mae_alert": None,
+}
+
+
+def get_config(db: Session, project_id: int) -> dict:
+    """プロジェクト設定を dict で返す。未登録の場合はデフォルト値を返す。"""
+    cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
+    if cfg:
+        return {k: getattr(cfg, k) for k in DEFAULTS}
+    return DEFAULTS.copy()

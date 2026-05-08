@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Project
+from ..services import config as config_svc
 from ..services import drift as drift_svc
 from ..services import metrics as metrics_svc
 
@@ -25,7 +26,6 @@ async def index(
     db: Session = Depends(get_db),
 ):
     projects = db.query(Project).order_by(Project.created_at).all()
-    # サマリーページからの直リンク対応: project_id が指定されていれば先頭に移動
     initial_project_id = project_id or (projects[0].id if projects else None)
     return templates.TemplateResponse(
         request, "index.html", {"projects": projects, "initial_project_id": initial_project_id}
@@ -42,16 +42,22 @@ async def summary_page(request: Request, db: Session = Depends(get_db)):
 async def summary_panels(
     request: Request,
     hours: int = Query(24),
-    drift_window: int = Query(100),
     db: Session = Depends(get_db),
 ):
     projects = db.query(Project).order_by(Project.created_at).all()
     rows = []
     for p in projects:
+        cfg = config_svc.get_config(db, p.id)
         summary = metrics_svc.get_summary(db, p.id, hours)
         accuracy = metrics_svc.get_latest_accuracy(db, p.id, hours=168, task_type=p.task_type)
-        drift = drift_svc.detect_drift(db, p.id, drift_window)
-        rows.append({"project": p, "summary": summary, "accuracy": accuracy, "drift": drift})
+        drift = drift_svc.detect_drift(
+            db, p.id,
+            window_size=cfg["drift_window_size"],
+            psi_warning=cfg["psi_warning"],
+            psi_alert=cfg["psi_alert"],
+            ks_alpha=cfg["ks_alpha"],
+        )
+        rows.append({"project": p, "summary": summary, "accuracy": accuracy, "drift": drift, "config": cfg})
 
     return templates.TemplateResponse(
         request,
@@ -66,17 +72,23 @@ async def all_panels(
     project_id: int = Query(...),
     hours: int = Query(24),
     days: int = Query(7),
-    drift_window: int = Query(100),
     db: Session = Depends(get_db),
 ):
     project = db.get(Project, project_id)
     if not project:
         return HTMLResponse("<p class='text-gray-400 text-center py-8'>プロジェクトが見つかりません</p>")
 
+    cfg = config_svc.get_config(db, project_id)
     summary = metrics_svc.get_summary(db, project_id, hours)
     latency = metrics_svc.get_latency_distribution(db, project_id, hours)
     accuracy = metrics_svc.get_accuracy_over_time(db, project_id, days, project.task_type)
-    drift = drift_svc.detect_drift(db, project_id, drift_window)
+    drift = drift_svc.detect_drift(
+        db, project_id,
+        window_size=cfg["drift_window_size"],
+        psi_warning=cfg["psi_warning"],
+        psi_alert=cfg["psi_alert"],
+        ks_alpha=cfg["ks_alpha"],
+    )
 
     return templates.TemplateResponse(
         request,
@@ -87,7 +99,25 @@ async def all_panels(
             "latency": latency,
             "accuracy": accuracy,
             "drift": drift,
+            "config": cfg,
             "hours": hours,
             "days": days,
         },
+    )
+
+
+@router.get("/ui/config-modal/{project_id}", response_class=HTMLResponse)
+async def config_modal(
+    request: Request,
+    project_id: int,
+    db: Session = Depends(get_db),
+):
+    project = db.get(Project, project_id)
+    if not project:
+        return HTMLResponse("<p class='text-red-400 p-4'>プロジェクトが見つかりません</p>")
+    cfg = config_svc.get_config(db, project_id)
+    return templates.TemplateResponse(
+        request,
+        "partials/config_modal.html",
+        {"project": project, "config": cfg},
     )

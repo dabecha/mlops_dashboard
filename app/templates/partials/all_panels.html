@@ -79,7 +79,10 @@
       <canvas id="accuracy-chart"
         data-labels='{{ accuracy.labels | tojson }}'
         data-values='{{ accuracy.data | tojson }}'
-        data-metric-name="{{ accuracy.metric_name }}">
+        data-metric-name="{{ accuracy.metric_name }}"
+        data-threshold-warning="{{ config.accuracy_warning if project.task_type == 'classification' else (config.mae_warning or '') }}"
+        data-threshold-alert="{{ config.accuracy_alert if project.task_type == 'classification' else (config.mae_alert or '') }}"
+        data-task-type="{{ project.task_type }}">
       </canvas>
     </div>
     {% else %}
@@ -135,9 +138,9 @@
         {{ drift.psi }}
       </p>
       <div class="mt-2 flex gap-2 text-xs">
-        <span class="{% if drift.psi_level == 'ok' %}text-emerald-400 font-semibold{% else %}text-gray-600{% endif %}">&lt; 0.1 正常</span>
-        <span class="{% if drift.psi_level == 'warning' %}text-yellow-400 font-semibold{% else %}text-gray-600{% endif %}">0.1–0.25 警告</span>
-        <span class="{% if drift.psi_level == 'alert' %}text-red-400 font-semibold{% else %}text-gray-600{% endif %}">&gt; 0.25 異常</span>
+        <span class="{% if drift.psi_level == 'ok' %}text-emerald-400 font-semibold{% else %}text-gray-600{% endif %}">&lt; {{ drift.psi_warning }} 正常</span>
+        <span class="{% if drift.psi_level == 'warning' %}text-yellow-400 font-semibold{% else %}text-gray-600{% endif %}">{{ drift.psi_warning }}–{{ drift.psi_alert }} 警告</span>
+        <span class="{% if drift.psi_level == 'alert' %}text-red-400 font-semibold{% else %}text-gray-600{% endif %}">&gt; {{ drift.psi_alert }} 異常</span>
       </div>
     </div>
 
@@ -157,7 +160,7 @@
         </div>
         <div class="flex justify-between text-xs">
           <span class="text-gray-600">有意水準</span>
-          <span class="text-gray-600">α = 0.05</span>
+          <span class="text-gray-600">α = {{ drift.ks_alpha }}</span>
         </div>
       </div>
       <p class="text-xs mt-3 {% if drift.drift_by_ks %}text-red-400{% else %}text-emerald-400{% endif %}">

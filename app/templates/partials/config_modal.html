@@ -1,0 +1,173 @@
+<form id="config-form" onsubmit="handleConfigSave(event, {{ project.id }})">
+
+  <!-- モーダルヘッダー -->
+  <div class="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+    <div>
+      <h3 class="text-base font-semibold text-white">閾値設定</h3>
+      <p class="text-xs text-gray-500 mt-0.5">{{ project.name }}
+        <span class="ml-1 px-1.5 py-0.5 rounded text-xs
+          {% if project.task_type == 'classification' %}bg-indigo-900 text-indigo-300{% else %}bg-teal-900 text-teal-300{% endif %}">
+          {% if project.task_type == 'classification' %}分類{% else %}回帰{% endif %}
+        </span>
+      </p>
+    </div>
+    <button type="button" onclick="document.getElementById('config-dialog').close()"
+      class="text-gray-500 hover:text-white transition-colors p-1 rounded">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- フォーム本体 -->
+  <div class="px-6 py-5 space-y-6 max-h-[60vh] overflow-y-auto">
+
+    <!-- ドリフト検知 -->
+    <section>
+      <h4 class="text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10"/>
+        </svg>
+        ドリフト検知
+      </h4>
+      <div class="grid grid-cols-2 gap-4">
+
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">ウィンドウサイズ（件）
+            <span class="text-gray-600 ml-1" title="参照・現在の各ウィンドウのサンプル数">?</span>
+          </label>
+          <input type="number" name="drift_window_size" min="10" max="10000" step="10"
+            value="{{ config.drift_window_size }}"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">KS 検定 有意水準 α
+            <span class="text-gray-600 ml-1" title="この値未満の p 値でドリフト判定">?</span>
+          </label>
+          <input type="number" name="ks_alpha" min="0.001" max="0.2" step="0.001"
+            value="{{ config.ks_alpha }}"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">
+            PSI 警告閾値
+            <span class="px-1 py-0.5 rounded text-xs bg-yellow-900/50 text-yellow-400 ml-1">警告</span>
+          </label>
+          <input type="number" name="psi_warning" min="0" max="1" step="0.01"
+            value="{{ config.psi_warning }}"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">
+            PSI アラート閾値
+            <span class="px-1 py-0.5 rounded text-xs bg-red-900/50 text-red-400 ml-1">異常</span>
+          </label>
+          <input type="number" name="psi_alert" min="0" max="2" step="0.01"
+            value="{{ config.psi_alert }}"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+
+      </div>
+      <p class="text-xs text-gray-600 mt-2">
+        PSI: 0 – 警告閾値 → 正常　/　警告閾値 – アラート閾値 → 警告　/　アラート閾値 以上 → 異常
+      </p>
+    </section>
+
+    <!-- 精度アラート -->
+    <section>
+      <h4 class="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        精度アラート
+      </h4>
+
+      {% if project.task_type == 'classification' %}
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">
+            Accuracy 警告閾値（%）
+            <span class="px-1 py-0.5 rounded text-xs bg-yellow-900/50 text-yellow-400 ml-1">警告</span>
+          </label>
+          <input type="number" name="accuracy_warning" min="0" max="100" step="0.1"
+            value="{{ config.accuracy_warning }}"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">
+            Accuracy アラート閾値（%）
+            <span class="px-1 py-0.5 rounded text-xs bg-red-900/50 text-red-400 ml-1">異常</span>
+          </label>
+          <input type="number" name="accuracy_alert" min="0" max="100" step="0.1"
+            value="{{ config.accuracy_alert }}"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+      </div>
+      <p class="text-xs text-gray-600 mt-2">
+        Accuracy ≥ 警告閾値 → 正常（緑）　/　アラート閾値 ≤ Accuracy &lt; 警告閾値 → 警告（黄）　/　&lt; アラート閾値 → 異常（赤）
+      </p>
+
+      {# 回帰用は hidden で送信（値は無視） #}
+      <input type="hidden" name="mae_warning" value="">
+      <input type="hidden" name="mae_alert" value="">
+
+      {% else %}
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">
+            MAE 警告閾値
+            <span class="px-1 py-0.5 rounded text-xs bg-yellow-900/50 text-yellow-400 ml-1">警告</span>
+            <span class="text-gray-600">（空欄で無効）</span>
+          </label>
+          <input type="number" name="mae_warning" min="0" step="0.001"
+            value="{{ config.mae_warning if config.mae_warning is not none else '' }}"
+            placeholder="例: 10.0"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">
+            MAE アラート閾値
+            <span class="px-1 py-0.5 rounded text-xs bg-red-900/50 text-red-400 ml-1">異常</span>
+            <span class="text-gray-600">（空欄で無効）</span>
+          </label>
+          <input type="number" name="mae_alert" min="0" step="0.001"
+            value="{{ config.mae_alert if config.mae_alert is not none else '' }}"
+            placeholder="例: 20.0"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+      </div>
+      <p class="text-xs text-gray-600 mt-2">
+        MAE &lt; 警告閾値 → 正常（緑）　/　警告閾値 ≤ MAE &lt; アラート閾値 → 警告（黄）　/　≥ アラート閾値 → 異常（赤）
+      </p>
+
+      {# 分類用は hidden で送信（デフォルト値） #}
+      <input type="hidden" name="accuracy_warning" value="75.0">
+      <input type="hidden" name="accuracy_alert" value="60.0">
+      {% endif %}
+    </section>
+
+  </div>
+
+  <!-- フォームフッター -->
+  <div class="flex items-center justify-between px-6 py-4 border-t border-gray-800">
+    <p id="config-save-msg" class="text-xs"></p>
+    <div class="flex gap-3">
+      <button type="button" onclick="document.getElementById('config-dialog').close()"
+        class="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">
+        キャンセル
+      </button>
+      <button type="submit"
+        class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        保存
+      </button>
+    </div>
+  </div>
+
+</form>

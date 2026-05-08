@@ -65,5 +65,67 @@
   </footer>
 
   {% block scripts %}{% endblock %}
+
+  <!-- 閾値設定モーダル（全ページ共通） -->
+  <dialog id="config-dialog"
+    class="bg-gray-900 border border-gray-800 rounded-xl p-0 w-full max-w-lg shadow-2xl open:animate-none"
+    style="color: inherit;">
+    <div id="config-modal-body"><!-- htmx でロード --></div>
+  </dialog>
+
+  <script>
+    // モーダルを開く（ページ側から onSuccess コールバックを渡す）
+    function openConfigModal(projectId, onSuccess) {
+      window._configOnSuccess = onSuccess || null;
+      htmx.ajax('GET', '/ui/config-modal/' + projectId, {
+        target: '#config-modal-body',
+        swap: 'innerHTML'
+      });
+      document.getElementById('config-dialog').showModal();
+    }
+
+    // 設定フォームの保存処理
+    async function handleConfigSave(event, projectId) {
+      event.preventDefault();
+      const form = event.target;
+      const data = Object.fromEntries(new FormData(form));
+      const payload = {
+        drift_window_size: parseInt(data.drift_window_size, 10),
+        psi_warning:       parseFloat(data.psi_warning),
+        psi_alert:         parseFloat(data.psi_alert),
+        ks_alpha:          parseFloat(data.ks_alpha),
+        accuracy_warning:  parseFloat(data.accuracy_warning),
+        accuracy_alert:    parseFloat(data.accuracy_alert),
+        mae_warning:       data.mae_warning !== '' ? parseFloat(data.mae_warning) : null,
+        mae_alert:         data.mae_alert   !== '' ? parseFloat(data.mae_alert)   : null,
+      };
+
+      const msgEl = document.getElementById('config-save-msg');
+      try {
+        const resp = await fetch('/api/projects/' + projectId + '/config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (resp.ok) {
+          if (msgEl) { msgEl.textContent = '保存しました'; msgEl.className = 'text-xs text-emerald-400'; }
+          setTimeout(() => {
+            document.getElementById('config-dialog').close();
+            if (window._configOnSuccess) window._configOnSuccess();
+          }, 600);
+        } else {
+          const err = await resp.json();
+          if (msgEl) { msgEl.textContent = 'エラー: ' + (err.detail || resp.status); msgEl.className = 'text-xs text-red-400'; }
+        }
+      } catch (e) {
+        if (msgEl) { msgEl.textContent = '通信エラーが発生しました'; msgEl.className = 'text-xs text-red-400'; }
+      }
+    }
+
+    // backdrop クリックで閉じる
+    document.getElementById('config-dialog').addEventListener('click', function(e) {
+      if (e.target === this) this.close();
+    });
+  </script>
 </body>
 </html>

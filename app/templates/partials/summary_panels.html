@@ -102,10 +102,12 @@
         <!-- 精度 / MAE -->
         <td class="px-4 py-4 text-right">
           {% if a.value is not none %}
-          <span class="font-mono
-            {% if p.task_type == 'classification' %}
-              {% if a.value >= 90 %}text-emerald-400{% elif a.value >= 75 %}text-yellow-400{% else %}text-red-400{% endif %}
-            {% else %}text-teal-300{% endif %}">
+          {% if p.task_type == 'classification' %}
+            {% set acc_color = 'text-emerald-400' if a.value >= row.config.accuracy_warning else ('text-yellow-400' if a.value >= row.config.accuracy_alert else 'text-red-400') %}
+          {% else %}
+            {% set acc_color = 'text-teal-300' if row.config.mae_warning is none else ('text-emerald-400' if a.value < row.config.mae_warning else ('text-yellow-400' if row.config.mae_alert is none or a.value < row.config.mae_alert else 'text-red-400')) %}
+          {% endif %}
+          <span class="font-mono {{ acc_color }}">
             {% if p.task_type == 'classification' %}{{ a.value }}%{% else %}{{ a.value }}{% endif %}
           </span>
           <div class="text-xs text-gray-600">{{ a.metric_name }} / n={{ a.sample_count }}</div>
@@ -142,12 +144,22 @@
           {% endif %}
         </td>
 
-        <!-- 詳細リンク -->
+        <!-- 詳細 / 設定 -->
         <td class="px-4 py-4 text-center">
-          <a href="/?project_id={{ p.id }}"
-            class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline transition-colors whitespace-nowrap">
-            詳細 →
-          </a>
+          <div class="flex items-center justify-center gap-2">
+            <a href="/?project_id={{ p.id }}"
+              class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline transition-colors whitespace-nowrap">
+              詳細 →
+            </a>
+            <button onclick="openConfigModal({{ p.id }}, loadSummary)" title="閾値設定"
+              class="text-gray-600 hover:text-gray-300 transition-colors p-0.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+            </button>
+          </div>
         </td>
 
       </tr>
@@ -158,11 +170,11 @@
 
 <!-- 凡例 -->
 <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-xs text-gray-600">
-  <span><span class="text-emerald-400">■</span> 精度 ≥ 90%</span>
-  <span><span class="text-yellow-400">■</span> 精度 75–90%</span>
-  <span><span class="text-red-400">■</span> 精度 &lt; 75%</span>
+  <span><span class="text-emerald-400">■</span> 正常</span>
+  <span><span class="text-yellow-400">■</span> 警告</span>
+  <span><span class="text-red-400">■</span> アラート</span>
   <span class="ml-4"><span class="text-orange-400">■</span> エラー率 &gt; 5%</span>
-  <span>PSI &lt; 0.1: 正常 / 0.1–0.25: 警告 / &gt; 0.25: 異常</span>
+  <span class="ml-4">精度・ドリフト閾値はプロジェクトごとに設定（⚙ で変更）</span>
 </div>
 
 {% endif %}
