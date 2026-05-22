@@ -72,6 +72,10 @@ class ProjectConfigResponse(ProjectConfigUpdate):
     model_config = {"from_attributes": True}
 
 
+class BulkDeleteLogsRequest(BaseModel):
+    log_ids: list[int]
+
+
 class InferenceLogResponse(BaseModel):
     log_id: int
     project_id: int

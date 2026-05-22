@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime as dt
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
@@ -8,10 +9,12 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Project
+from ..models import InferenceLog, Project
 from ..services import config as config_svc
 from ..services import drift as drift_svc
 from ..services import metrics as metrics_svc
+
+_LOG_PAGE_SIZE = 50
 
 router = APIRouter(tags=["ui"])
 
@@ -109,6 +112,70 @@ async def all_panels(
             "config": cfg,
             "hours": hours,
             "days": days,
+        },
+    )
+
+
+@router.get("/manage", response_class=HTMLResponse)
+async def manage_page(request: Request, db: Session = Depends(get_db)):
+    projects = db.query(Project).order_by(Project.created_at).all()
+    return templates.TemplateResponse(request, "manage.html", {"projects": projects})
+
+
+@router.get("/ui/project-list", response_class=HTMLResponse)
+async def project_list(request: Request, db: Session = Depends(get_db)):
+    projects = db.query(Project).order_by(Project.created_at).all()
+    return templates.TemplateResponse(
+        request, "partials/project_list.html", {"projects": projects}
+    )
+
+
+@router.get("/ui/log-list", response_class=HTMLResponse)
+async def log_list(
+    request: Request,
+    project_id: int = Query(...),
+    from_dt: str | None = Query(None),
+    to_dt: str | None = Query(None),
+    request_id_filter: str | None = Query(None),
+    is_error: str | None = Query(None),
+    page: int = Query(1),
+    db: Session = Depends(get_db),
+):
+    q = db.query(InferenceLog).filter(InferenceLog.project_id == project_id)
+    if from_dt:
+        try:
+            q = q.filter(InferenceLog.request_timestamp >= dt.fromisoformat(from_dt))
+        except ValueError:
+            pass
+    if to_dt:
+        try:
+            q = q.filter(InferenceLog.request_timestamp <= dt.fromisoformat(to_dt))
+        except ValueError:
+            pass
+    if request_id_filter:
+        q = q.filter(InferenceLog.request_id.contains(request_id_filter))
+    if is_error == "true":
+        q = q.filter(InferenceLog.is_error == True)  # noqa: E712
+    elif is_error == "false":
+        q = q.filter(InferenceLog.is_error == False)  # noqa: E712
+
+    total = q.count()
+    logs = (
+        q.order_by(InferenceLog.request_timestamp.desc())
+        .offset((page - 1) * _LOG_PAGE_SIZE)
+        .limit(_LOG_PAGE_SIZE)
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        request,
+        "partials/log_list.html",
+        {
+            "logs": logs,
+            "total": total,
+            "page": page,
+            "page_size": _LOG_PAGE_SIZE,
+            "project_id": project_id,
         },
     )
 

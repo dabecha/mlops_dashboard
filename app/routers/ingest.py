@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import DeployedModel, InferenceLog, Project, ProjectConfig
 from ..schemas import (
+    BulkDeleteLogsRequest,
     DeployedModelCreate,
     DeployedModelResponse,
     InferenceLogCreate,
@@ -95,6 +96,26 @@ def upsert_config(project_id: int, body: ProjectConfigUpdate, db: Session = Depe
     db.commit()
     db.refresh(cfg)
     return cfg
+
+
+@router.delete("/logs/{log_id}", status_code=204)
+def delete_log(log_id: int, db: Session = Depends(get_db)):
+    log = db.get(InferenceLog, log_id)
+    if not log:
+        raise HTTPException(status_code=404, detail="ログが見つかりません")
+    db.delete(log)
+    db.commit()
+
+
+@router.post("/logs/bulk-delete", status_code=200)
+def bulk_delete_logs(body: BulkDeleteLogsRequest, db: Session = Depends(get_db)):
+    count = (
+        db.query(InferenceLog)
+        .filter(InferenceLog.log_id.in_(body.log_ids))
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"deleted": count}
 
 
 @router.post("/infer", response_model=InferenceLogResponse, status_code=201)
