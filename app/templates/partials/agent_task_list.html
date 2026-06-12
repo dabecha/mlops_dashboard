@@ -1,0 +1,109 @@
+{% if not tasks %}
+<div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center text-gray-500 text-sm">
+  条件に一致するタスクが見つかりませんでした
+</div>
+{% else %}
+{% set total_pages = ((total - 1) // page_size + 1) if total > 0 else 1 %}
+<div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+
+  <div class="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+    <div class="text-sm text-gray-400">
+      全 <span class="text-white font-medium">{{ "{:,}".format(total) }}</span> 件
+      {% if total > page_size %}
+      <span class="text-gray-600 ml-1">
+        （{{ (page - 1) * page_size + 1 }}–{{ [page * page_size, total] | min }} 件表示）
+      </span>
+      {% endif %}
+    </div>
+    <button onclick="deleteSelectedAgentTasks()"
+      class="flex items-center gap-1.5 border border-red-800 hover:border-red-600 text-red-500 hover:text-red-300 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+      </svg>
+      選択削除
+    </button>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-800 text-xs text-gray-500 uppercase tracking-wider">
+          <th class="px-3 py-3 w-10">
+            <input type="checkbox" class="rounded bg-gray-700 border-gray-600 cursor-pointer"
+              onchange="toggleAllAgentTasks(this)">
+          </th>
+          <th class="text-left px-3 py-3 font-medium">ID</th>
+          <th class="text-left px-3 py-3 font-medium">開始日時 (UTC)</th>
+          <th class="text-left px-3 py-3 font-medium">タスク名</th>
+          <th class="text-center px-3 py-3 font-medium">ステータス</th>
+          <th class="text-right px-3 py-3 font-medium">コスト</th>
+          <th class="text-right px-3 py-3 font-medium">処理時間</th>
+          <th class="text-right px-3 py-3 font-medium">品質</th>
+          <th class="px-3 py-3 w-10"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-800">
+        {% for task in tasks %}
+        <tr id="agent-task-row-{{ task.task_id }}" class="hover:bg-gray-800/50 transition-colors">
+          <td class="px-3 py-2.5 text-center">
+            <input type="checkbox" class="agent-task-checkbox rounded bg-gray-700 border-gray-600 cursor-pointer"
+              value="{{ task.task_id }}">
+          </td>
+          <td class="px-3 py-2.5 text-gray-500 font-mono text-xs">{{ task.task_id }}</td>
+          <td class="px-3 py-2.5 font-mono text-xs text-gray-300 whitespace-nowrap">
+            {{ task.started_at.strftime('%Y-%m-%d %H:%M:%S') }}
+          </td>
+          <td class="px-3 py-2.5 text-xs">
+            <span class="block max-w-[200px] truncate text-gray-400" title="{{ task.task_name or '' }}">
+              {{ task.task_name or '—' }}
+            </span>
+          </td>
+          <td class="px-3 py-2.5 text-center">
+            {% if task.status == 'success' %}
+            <span class="px-1.5 py-0.5 rounded text-xs bg-emerald-900/60 text-emerald-300">成功</span>
+            {% elif task.status == 'failure' %}
+            <span class="px-1.5 py-0.5 rounded text-xs bg-red-900/60 text-red-300">失敗</span>
+            {% else %}
+            <span class="px-1.5 py-0.5 rounded text-xs bg-orange-900/60 text-orange-300">エラー</span>
+            {% endif %}
+          </td>
+          <td class="px-3 py-2.5 text-right font-mono text-xs text-gray-300">
+            {% if task.total_cost_usd is not none %}${{ "%.6f"|format(task.total_cost_usd) }}{% else %}—{% endif %}
+          </td>
+          <td class="px-3 py-2.5 text-right font-mono text-xs text-gray-300">
+            {% if task.duration_ms is not none %}{{ "%.0f"|format(task.duration_ms) }} ms{% else %}—{% endif %}
+          </td>
+          <td class="px-3 py-2.5 text-right font-mono text-xs text-gray-400">
+            {% if task.quality_score is not none %}{{ "%.3f"|format(task.quality_score) }}{% else %}—{% endif %}
+          </td>
+          <td class="px-3 py-2.5 text-right">
+            <button onclick="deleteAgentTask({{ task.task_id }})"
+              class="text-red-700 hover:text-red-400 transition-colors p-0.5" title="削除">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if total_pages > 1 %}
+  <div class="flex items-center justify-between px-4 py-3 border-t border-gray-800">
+    <button onclick="searchAgentTasks({{ page - 1 }})" {% if page <= 1 %}disabled{% endif %}
+      class="text-xs text-gray-400 hover:text-white disabled:text-gray-700 disabled:cursor-not-allowed transition-colors px-3 py-1.5 border border-gray-700 disabled:border-gray-800 rounded-lg">
+      ← 前へ
+    </button>
+    <span class="text-xs text-gray-500">{{ page }} / {{ total_pages }} ページ</span>
+    <button onclick="searchAgentTasks({{ page + 1 }})" {% if page >= total_pages %}disabled{% endif %}
+      class="text-xs text-gray-400 hover:text-white disabled:text-gray-700 disabled:cursor-not-allowed transition-colors px-3 py-1.5 border border-gray-700 disabled:border-gray-800 rounded-lg">
+      次へ →
+    </button>
+  </div>
+  {% endif %}
+
+</div>
+{% endif %}

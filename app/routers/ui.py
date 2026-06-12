@@ -9,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import InferenceLog, Project
+from ..models import AgentProject, InferenceLog, Project
 from ..services import config as config_svc
 from ..services import drift as drift_svc
 from ..services import metrics as metrics_svc
@@ -119,7 +119,10 @@ async def all_panels(
 @router.get("/manage", response_class=HTMLResponse)
 async def manage_page(request: Request, db: Session = Depends(get_db)):
     projects = db.query(Project).order_by(Project.created_at).all()
-    return templates.TemplateResponse(request, "manage.html", {"projects": projects})
+    agent_projects = db.query(AgentProject).order_by(AgentProject.created_at).all()
+    return templates.TemplateResponse(
+        request, "manage.html", {"projects": projects, "agent_projects": agent_projects}
+    )
 
 
 @router.get("/ui/project-list", response_class=HTMLResponse)
