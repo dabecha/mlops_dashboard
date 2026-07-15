@@ -33,11 +33,12 @@ SQLite ファイル。アプリ起動時に自動生成されます（`mlops.db`
 
 ### テーブル一覧
 
-```
-m_projects
-t_inference_logs
-t_deployed_models
-```
+| テーブル | 種別 | 説明 |
+|---|---|---|
+| `m_projects` | マスタ | ML プロジェクト |
+| `project_configs` | 設定 | ML プロジェクト閾値設定 |
+| `m_deployed_models` | マスタ | デプロイ済みモデル・特徴量ドリフト参照データ |
+| `t_inference_logs` | トランザクション | 推論リクエスト・結果ログ |
 
 ---
 
@@ -48,18 +49,53 @@ ML プロジェクトのマスターテーブル。
 | カラム | 型 | NULL | デフォルト | 説明 |
 |---|---|---|---|---|
 | `project_id` | INTEGER | NO | auto | 主キー |
-| `project_name` | VARCHAR(100) | NO | — | プロジェクト名（ユニーク） |
+| `project_name` | VARCHAR(100) | NO | — | プロジェクト名（ユニーク）。Dataiku モードでは Dataiku プロジェクトキーとして使用 |
 | `description` | VARCHAR(500) | YES | NULL | 説明文 |
-| `task_type` | VARCHAR(20) | NO | NULL | タスク種別。二値分類: `binary`, 多ラベル分類: `multi-label`, 多クラス分類: `multi-class`, 回帰: `regression` |
+| `task_type` | VARCHAR(20) | NO | `binary` | タスク種別: `binary` / `multi-class` / `multi-label` / `regression` |
 | `created_at` | DATETIME | NO | 現在時刻 | 登録日時（UTC） |
 
-**インデックス:** `id`（主キー）、`name`（ユニーク）
+---
+
+### `project_configs` テーブル
+
+ML プロジェクトごとの閾値設定。未設定の場合はデフォルト値を使用。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| `id` | INTEGER | NO | auto | 主キー |
+| `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー（ユニーク） |
+| `drift_window_size` | INTEGER | NO | `100` | ドリフト検知に使う直近サンプル数 |
+| `psi_warning` | REAL | NO | `0.10` | PSI 警告閾値 |
+| `psi_alert` | REAL | NO | `0.25` | PSI 異常閾値 |
+| `ks_alpha` | REAL | NO | `0.05` | KS 検定の有意水準 |
+| `accuracy_warning` | REAL | NO | `75.0` | 精度警告閾値（%） |
+| `accuracy_alert` | REAL | NO | `60.0` | 精度異常閾値（%） |
+| `mae_warning` | REAL | YES | NULL | MAE 警告閾値（回帰用） |
+| `mae_alert` | REAL | YES | NULL | MAE 異常閾値（回帰用） |
+| `updated_at` | DATETIME | NO | 現在時刻 | 最終更新日時（UTC） |
+
+---
+
+### `m_deployed_models` テーブル
+
+デプロイ済みモデルの記録。1 サンプル = 1 行で学習データを蓄積し、特徴量ドリフトの参照分布として使用。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| `model_id` | INTEGER | NO | auto | 主キー |
+| `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー |
+| `model_version` | VARCHAR(100) | YES | NULL | モデルバージョン識別子 |
+| `feature_values` | TEXT | YES | NULL | 学習サンプルの特徴量 JSON（例: `{"age": 35.0, "amount": 5200.0}`） |
+| `feature_dtypes` | TEXT | YES | NULL | 特徴量データ型 JSON（例: `{"age": "float32"}`） |
+| `feature_importance` | TEXT | YES | NULL | 特徴量重要度 JSON（例: `{"age": 0.43, "amount": 0.57}`） |
+| `actual_values` | REAL | YES | NULL | 学習時の正解ラベル |
+| `created_at` | DATETIME | NO | 現在時刻 | 登録日時（UTC） |
 
 ---
 
 ### `t_inference_logs` テーブル
 
-ML モデルの推論リクエスト・結果ログ。1 リクエストにつき 1 レコードを記録します。
+ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レコード。
 
 | カラム | 型 | NULL | デフォルト | 説明 |
 |---|---|---|---|---|
@@ -67,68 +103,42 @@ ML モデルの推論リクエスト・結果ログ。1 リクエストにつき
 | `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー |
 | `request_timestamp` | DATETIME | NO | 現在時刻 | 推論実行日時（UTC） |
 | `request_id` | VARCHAR(100) | YES | NULL | 呼び出し元が付与するリクエスト識別子 |
-| `model_id` | VARCHAR(100) | YES | NULL | `m_deployed_model.model_id` への外部キー |
+| `model_id` | INTEGER | YES | NULL | `m_deployed_models.model_id` への外部キー |
 | `prediction_values` | REAL | NO | — | モデルの予測値（分類: 確率 0–1、回帰: 数値） |
-| `actual_values` | REAL | YES | NULL | 正解ラベル。遅延ラベリングで後から投入可 |
-| `response_time_ms` | REAL | NO | — | 推論にかかった応答時間（ミリ秒） |
+| `actual_values` | REAL | YES | NULL | 正解ラベル（遅延ラベリングで後から投入可） |
+| `response_time_ms` | REAL | NO | — | 推論応答時間（ms） |
 | `is_error` | BOOLEAN | NO | `false` | エラー発生フラグ |
-| `feature_values` | TEXT | YES | NULL | 入力特徴量の JSON 文字列（例: `{"age": 35.0, "amount": 5200.0}`） |
-| `feature_dtypes` | TEXT | YES | NULL | 入力特徴量のデータ型の JSON 文字列（例: `{"age": "uint8", "amount": "uint8"}`） |
-
-**インデックス:** `id`（主キー）、`project_id`、`model_id`、`request_timestamp`
-
-**リレーション:** `project_id` → `m_projects.project_id`（カスケード削除）、`model_id` → `m_deployed_models.model_id`（カスケード削除）
-
----
-
-### `m_deployed_models` テーブル
-
-デプロイされたML モデル。プロジェクト毎にモデルが更新される毎に追記します。
-
-| カラム | 型 | NULL | デフォルト | 説明 |
-|---|---|---|---|---|
-| `model_id` | INTEGER | NO | auto | 主キー |
-| `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー |
-| `model_version` | VARCHAR(100) | YES | NULL | 推論に利用されたモデルのバージョン |
-| `feature_values` | TEXT | YES | NULL | 学習時の入力特徴量の JSON 文字列（例: `{"age": 35.0, "amount": 5200.0}`） |
-| `feature_dtypes` | TEXT | YES | NULL | 学習時の入力特徴量のデータ型の JSON 文字列（例: `{"age": "uint8", "amount": "uint8"}`） |
-| `feature_importance` | TEXT | YES | NULL | 学習時の入力特徴量重要度の JSON 文字列（例: `{"age": 0.43, "amount": 0.21}`） |
-| `actual_values` | REAL | YES | NULL | 学習時の正解データ |
-| `created_at` | DATETIME | NO | 現在時刻 | 登録日時（UTC） |
-
-**インデックス:** `model_id`（主キー）、`project_id`、`created_at`
-
-**リレーション:** `project_id` → `m_projects.project_id`（カスケード削除）
-
+| `feature_values` | TEXT | YES | NULL | 入力特徴量 JSON（例: `{"age": 35.0, "amount": 5200.0}`） |
+| `feature_dtypes` | TEXT | YES | NULL | 入力特徴量データ型 JSON |
 
 ---
 
 ### ER 図
 
 ```
-m_projects
-─────────────────────────────
-PK  project_id    INTEGER
+ m_projects
+ ─────────────────────────────
+ PK project_id    INTEGER
     project_name  VARCHAR(100)  UNIQUE
     description   VARCHAR(500)
     task_type     VARCHAR(20)   -- binary | multi-class | multi-label | regression
     created_at    DATETIME
-         │
-         │ 1 : N                    │ 1 : N
-         ▼                          ▼
-t_inference_logs             m_deployed_models
-─────────────────────────    ─────────────────────────────
-PK  log_id            INTEGER    PK  model_id         INTEGER
-FK  project_id        INTEGER    FK  project_id       INTEGER   → m_projects.project_id
-    request_timestamp DATETIME       model_version    VARCHAR(100)
-    request_id        VARCHAR(100)   feature_values   TEXT        -- JSON (1サンプル)
-FK  model_id          INTEGER    → m_deployed_models.model_id
-    prediction_values REAL           feature_dtypes   TEXT        -- JSON
-    actual_values     REAL           feature_importance TEXT       -- JSON
-    response_time_ms  REAL           actual_values    REAL
-    is_error          BOOLEAN        created_at       DATETIME
-    feature_values    TEXT        -- JSON
-    feature_dtypes    TEXT        -- JSON
+    │
+    │ 1:1                        │ 1:N                    │ 1:N
+    ▼                            ▼                        ▼
+ project_configs            t_inference_logs         m_deployed_models
+ ────────────────────────   ──────────────────────── ────────────────────────────
+    id            INT  PK   PK log_id     INTEGER    PK model_id        INTEGER
+ FK project_id    INT  UNIQ FK project_id INTEGER    FK project_id      INTEGER
+    drift_window_size  INT     request_timestamp      model_version      VARCHAR(100)
+    psi_warning   REAL        request_id             feature_values     TEXT  -- JSON
+    psi_alert     REAL     FK model_id   INTEGER →   feature_dtypes     TEXT  -- JSON
+    ks_alpha      REAL        prediction_values       feature_importance TEXT  -- JSON
+    accuracy_warning/alert     actual_values          actual_values      REAL
+    mae_warning/alert          response_time_ms       created_at         DATETIME
+    updated_at    DATETIME     is_error
+                               feature_values
+                               feature_dtypes
 ```
 
 ---
@@ -224,23 +234,28 @@ Content-Type: application/json
 
 ```
 mlops_dashboard/
-├── main.py                              # FastAPI エントリポイント
+├── main.py                              # FastAPI エントリポイント・起動設定
 ├── seed_data.py                         # デモデータ生成スクリプト
 ├── pyproject.toml                       # 依存パッケージ (uv)
+├── .env.example                         # 環境変数設定例
 ├── app/
+│   ├── settings.py                      # APP_MODE 等の環境変数設定
 │   ├── database.py                      # SQLite + SQLAlchemy セットアップ
-│   ├── models.py                        # ORM モデル定義
+│   ├── dataiku_client.py                # Dataiku DSS データプロバイダー
+│   ├── models.py                        # ORM モデル定義（全テーブル）
 │   ├── schemas.py                       # Pydantic スキーマ
 │   ├── routers/
 │   │   ├── ingest.py                    # データ収集 API
 │   │   └── ui.py                        # UI ページ + htmx パーシャル
 │   ├── services/
 │   │   ├── metrics.py                   # 集計ロジック
-│   │   └── drift.py                     # ドリフト検知（PSI / KS 検定）
+│   │   ├── drift.py                     # ドリフト検知（PSI / KS 検定）
+│   │   └── config.py                    # 閾値設定管理
 │   ├── templates/
 │   │   ├── base.html                    # 共通レイアウト
 │   │   ├── index.html                   # 詳細ページ
 │   │   ├── summary.html                 # サマリーページ
+│   │   ├── manage.html                  # プロジェクト管理ページ
 │   │   └── partials/
 │   │       ├── all_panels.html          # 詳細パネル群（htmx）
 │   │       └── summary_panels.html      # サマリーテーブル（htmx）
