@@ -7,13 +7,19 @@ import numpy as np
 from sqlalchemy.orm import Session
 
 from ..models import InferenceLog
+from ..settings import settings
 
 
 def _is_classification(task_type: str) -> bool:
     return task_type != "regression"
 
 
+# ── SQLite 実装 ──────────────────────────────────────────────────────────────
+
 def get_summary(db: Session, project_id: int, hours: int = 24) -> dict:
+    if settings.is_dataiku:
+        return _dku_get_summary(project_id, hours)
+
     since = datetime.utcnow() - timedelta(hours=hours)
     logs = (
         db.query(InferenceLog)
@@ -53,6 +59,9 @@ def get_summary(db: Session, project_id: int, hours: int = 24) -> dict:
 
 
 def get_latency_distribution(db: Session, project_id: int, hours: int = 24) -> dict:
+    if settings.is_dataiku:
+        return _dku_get_latency_distribution(project_id, hours)
+
     since = datetime.utcnow() - timedelta(hours=hours)
     rows = (
         db.query(InferenceLog.response_time_ms)
@@ -76,6 +85,9 @@ def get_latency_distribution(db: Session, project_id: int, hours: int = 24) -> d
 def get_latest_accuracy(
     db: Session, project_id: int, hours: int = 168, task_type: str = "binary"
 ) -> dict:
+    if settings.is_dataiku:
+        return _dku_get_latest_accuracy(project_id, hours, task_type)
+
     since = datetime.utcnow() - timedelta(hours=hours)
     logs = (
         db.query(InferenceLog)
@@ -110,6 +122,9 @@ def get_latest_accuracy(
 def get_accuracy_over_time(
     db: Session, project_id: int, days: int = 7, task_type: str = "binary"
 ) -> dict:
+    if settings.is_dataiku:
+        return _dku_get_accuracy_over_time(project_id, days, task_type)
+
     since = datetime.utcnow() - timedelta(days=days)
     logs = (
         db.query(InferenceLog)
@@ -139,6 +154,113 @@ def get_accuracy_over_time(
             values.append(round(correct / len(day_logs) * 100, 2))
         else:
             mae = sum(abs(l.prediction_values - l.actual_values) for l in day_logs) / len(day_logs)
+            values.append(round(mae, 4))
+
+    return {"labels": labels, "data": values, "metric_name": metric_name}
+
+
+# ── Dataiku 実装 ─────────────────────────────────────────────────────────────
+
+def _dku_get_summary(project_id: int, hours: int) -> dict:
+    from ..dataiku_client import get_inference_logs_df
+
+    since = datetime.utcnow() - timedelta(hours=hours)
+    df = get_inference_logs_df(project_id, since)
+
+    empty = {
+        "total_requests": 0, "error_count": 0, "error_rate": 0.0,
+        "avg_latency_ms": 0.0, "p50_latency_ms": 0.0,
+        "p95_latency_ms": 0.0, "p99_latency_ms": 0.0,
+    }
+    if df.empty:
+        return empty
+
+    total = len(df)
+    errors = int(df["is_error"].sum())
+    latencies = sorted(df["response_time_ms"].dropna().tolist())
+
+    def pct(data: list, p: float) -> float:
+        if not data:
+            return 0.0
+        idx = min(int(len(data) * p / 100), len(data) - 1)
+        return float(data[idx])
+
+    return {
+        "total_requests": total,
+        "error_count": errors,
+        "error_rate": round(errors / total * 100, 2),
+        "avg_latency_ms": round(float(df["response_time_ms"].mean()), 2),
+        "p50_latency_ms": round(pct(latencies, 50), 2),
+        "p95_latency_ms": round(pct(latencies, 95), 2),
+        "p99_latency_ms": round(pct(latencies, 99), 2),
+    }
+
+
+def _dku_get_latency_distribution(project_id: int, hours: int) -> dict:
+    from ..dataiku_client import get_inference_logs_df
+
+    since = datetime.utcnow() - timedelta(hours=hours)
+    df = get_inference_logs_df(project_id, since)
+    df = df[~df["is_error"]]
+    latencies = df["response_time_ms"].dropna().tolist()
+    if not latencies:
+        return {"labels": [], "counts": []}
+
+    arr = np.array(latencies)
+    counts, edges = np.histogram(arr, bins=20)
+    labels = [f"{edges[i]:.0f}–{edges[i+1]:.0f}" for i in range(len(edges) - 1)]
+    return {"labels": labels, "counts": counts.tolist()}
+
+
+def _dku_get_latest_accuracy(project_id: int, hours: int, task_type: str) -> dict:
+    from ..dataiku_client import get_inference_logs_df
+
+    since = datetime.utcnow() - timedelta(hours=hours)
+    df = get_inference_logs_df(project_id, since)
+    metric_name = "Accuracy (%)" if _is_classification(task_type) else "MAE"
+
+    df = df[df["actual_values"].notna() & ~df["is_error"]]
+    if df.empty:
+        return {"value": None, "metric_name": metric_name, "sample_count": 0}
+
+    if _is_classification(task_type):
+        correct = int(((df["prediction_values"] > 0.5) == df["actual_values"].astype(bool)).sum())
+        return {
+            "value": round(correct / len(df) * 100, 1),
+            "metric_name": metric_name,
+            "sample_count": len(df),
+        }
+    else:
+        mae = float((df["prediction_values"] - df["actual_values"]).abs().mean())
+        return {
+            "value": round(mae, 3),
+            "metric_name": metric_name,
+            "sample_count": len(df),
+        }
+
+
+def _dku_get_accuracy_over_time(project_id: int, days: int, task_type: str) -> dict:
+    from ..dataiku_client import get_inference_logs_df
+
+    since = datetime.utcnow() - timedelta(days=days)
+    df = get_inference_logs_df(project_id, since)
+    metric_name = "Accuracy (%)" if _is_classification(task_type) else "MAE"
+
+    df = df[df["actual_values"].notna()].sort_values("request_timestamp")
+    if df.empty:
+        return {"labels": [], "data": [], "metric_name": metric_name}
+
+    df["_day"] = df["request_timestamp"].dt.strftime("%Y-%m-%d")
+    labels = sorted(df["_day"].unique())
+    values: list[float] = []
+
+    for day in labels:
+        group = df[df["_day"] == day]
+        if _is_classification(task_type):
+            correct = int(((group["prediction_values"] > 0.5) == group["actual_values"].astype(bool)).sum())
+            values.append(round(correct / len(group) * 100, 2))
+        else:
+            mae = float((group["prediction_values"] - group["actual_values"]).abs().mean())
             values.append(round(mae, 4))
 
     return {"labels": labels, "data": values, "metric_name": metric_name}

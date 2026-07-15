@@ -7,6 +7,7 @@ from scipy import stats
 from sqlalchemy.orm import Session
 
 from ..models import DeployedModel, InferenceLog
+from ..settings import settings
 
 
 def _compute_psi(expected: np.ndarray, actual: np.ndarray, bins: int = 10) -> float:
@@ -27,6 +28,8 @@ def _compute_psi(expected: np.ndarray, actual: np.ndarray, bins: int = 10) -> fl
     return float(np.sum((act_pct - exp_pct) * np.log(act_pct / exp_pct)))
 
 
+# ── 予測値ドリフト ────────────────────────────────────────────────────────────
+
 def detect_drift(
     db: Session,
     project_id: int,
@@ -35,10 +38,9 @@ def detect_drift(
     psi_alert: float = 0.25,
     ks_alpha: float = 0.05,
 ) -> dict:
-    """
-    参照ウィンドウ（最古 window_size 件）と現在ウィンドウ（最新 window_size 件）を
-    KS 検定と PSI で比較して予測値ドリフトを検知する。
-    """
+    if settings.is_dataiku:
+        return _dku_detect_drift(project_id, window_size, psi_warning, psi_alert, ks_alpha)
+
     logs = (
         db.query(InferenceLog)
         .filter(
@@ -87,6 +89,8 @@ def detect_drift(
     }
 
 
+# ── 特徴量ドリフト ────────────────────────────────────────────────────────────
+
 def detect_feature_drift(
     db: Session,
     project_id: int,
@@ -94,11 +98,9 @@ def detect_feature_drift(
     psi_warning: float = 0.10,
     psi_alert: float = 0.25,
 ) -> dict:
-    """
-    m_deployed_models の最新モデルバージョンの特徴量分布と
-    t_inference_logs の最新 window_size 件の特徴量分布を特徴量ごとに PSI で比較する。
-    """
-    # 最新モデルバージョンを取得
+    if settings.is_dataiku:
+        return _dku_detect_feature_drift(project_id, window_size, psi_warning, psi_alert)
+
     latest_model = (
         db.query(DeployedModel)
         .filter(DeployedModel.project_id == project_id)
@@ -117,7 +119,6 @@ def detect_feature_drift(
 
     latest_version = latest_model.model_version
 
-    # 同バージョンの全参照サンプルを取得
     ref_models = (
         db.query(DeployedModel)
         .filter(
@@ -127,12 +128,10 @@ def detect_feature_drift(
         .all()
     )
 
-    # 特徴量重要度（最新行から取得）
     feature_importance: dict[str, float] = {}
     if latest_model.feature_importance:
         feature_importance = json.loads(latest_model.feature_importance)
 
-    # 参照特徴量サンプルを収集
     ref_features: list[dict] = []
     for m in ref_models:
         if m.feature_values:
@@ -147,7 +146,6 @@ def detect_feature_drift(
             "model_version": latest_version,
         }
 
-    # 現在ウィンドウ: 最新 window_size 件の推論ログ（feature_values あり）
     current_logs = (
         db.query(InferenceLog)
         .filter(
@@ -170,7 +168,143 @@ def detect_feature_drift(
         }
 
     current_features = [json.loads(l.feature_values) for l in current_logs]
+    return _compute_feature_drift_result(
+        ref_features, current_features, feature_importance,
+        psi_warning, psi_alert, latest_version,
+    )
 
+
+# ── Dataiku 実装 ─────────────────────────────────────────────────────────────
+
+def _dku_detect_drift(
+    project_id: int,
+    window_size: int,
+    psi_warning: float,
+    psi_alert: float,
+    ks_alpha: float,
+) -> dict:
+    from ..dataiku_client import get_inference_logs_df
+
+    df = get_inference_logs_df(project_id)
+    df = df[~df["is_error"]].sort_values("request_timestamp").reset_index(drop=True)
+
+    n = len(df)
+    if n < window_size * 2:
+        return {
+            "status": "insufficient_data",
+            "message": f"ドリフト検知には最低 {window_size * 2} 件のデータが必要です（現在: {n} 件）",
+            "ks_statistic": None,
+            "ks_pvalue": None,
+            "psi": None,
+            "psi_level": None,
+            "drift_detected": False,
+        }
+
+    reference = df["prediction_values"].iloc[:window_size].to_numpy(dtype=float)
+    current = df["prediction_values"].iloc[-window_size:].to_numpy(dtype=float)
+
+    ks_stat, ks_pvalue = stats.ks_2samp(reference, current)
+    psi = _compute_psi(reference, current)
+
+    psi_level = "ok" if psi < psi_warning else ("warning" if psi < psi_alert else "alert")
+    drift_by_ks = bool(ks_pvalue < ks_alpha)
+    drift_detected = drift_by_ks or psi_level == "alert"
+
+    return {
+        "status": "ok",
+        "ks_statistic": round(float(ks_stat), 4),
+        "ks_pvalue": round(float(ks_pvalue), 4),
+        "psi": round(psi, 4),
+        "psi_level": psi_level,
+        "drift_by_ks": drift_by_ks,
+        "drift_detected": drift_detected,
+        "reference_count": window_size,
+        "current_count": window_size,
+        "psi_warning": psi_warning,
+        "psi_alert": psi_alert,
+        "ks_alpha": ks_alpha,
+        "message": _build_message(drift_detected, psi_level, psi_warning, psi_alert, float(ks_pvalue), ks_alpha),
+    }
+
+
+def _dku_detect_feature_drift(
+    project_id: int,
+    window_size: int,
+    psi_warning: float,
+    psi_alert: float,
+) -> dict:
+    from ..dataiku_client import get_deployed_models_df, get_inference_logs_df, parse_json_col
+
+    models_df = get_deployed_models_df(project_id)
+    if models_df.empty:
+        return {
+            "status": "no_model",
+            "message": "デプロイ済みモデルが登録されていません",
+            "features": [],
+            "drift_detected": False,
+            "model_version": None,
+        }
+
+    models_df = models_df.sort_values("created_at", ascending=False)
+    latest_version = models_df.iloc[0]["model_version"]
+
+    ref_rows = models_df[models_df["model_version"] == latest_version]
+    feature_importance: dict[str, float] = {}
+    imp_raw = parse_json_col(models_df.iloc[0].get("feature_importance"))
+    if imp_raw:
+        feature_importance = imp_raw
+
+    ref_features = [
+        fv for row in ref_rows.itertuples()
+        if (fv := parse_json_col(getattr(row, "feature_values", None))) is not None
+    ]
+
+    if not ref_features:
+        return {
+            "status": "no_reference_features",
+            "message": "参照モデルに特徴量データがありません",
+            "features": [],
+            "drift_detected": False,
+            "model_version": latest_version,
+        }
+
+    logs_df = get_inference_logs_df(project_id)
+    logs_df = (
+        logs_df[~logs_df["is_error"] & logs_df["feature_values"].notna()]
+        .sort_values("request_timestamp", ascending=False)
+        .head(window_size)
+    )
+
+    if logs_df.empty:
+        return {
+            "status": "insufficient_data",
+            "message": "特徴量データが含まれる推論ログがありません",
+            "features": [],
+            "drift_detected": False,
+            "model_version": latest_version,
+        }
+
+    current_features = [
+        fv for fv_raw in logs_df["feature_values"]
+        if (fv := parse_json_col(fv_raw)) is not None
+    ]
+
+    return _compute_feature_drift_result(
+        ref_features, current_features, feature_importance,
+        psi_warning, psi_alert, latest_version,
+    )
+
+
+# ── 共通ロジック ─────────────────────────────────────────────────────────────
+
+def _compute_feature_drift_result(
+    ref_features: list[dict],
+    current_features: list[dict],
+    feature_importance: dict[str, float],
+    psi_warning: float,
+    psi_alert: float,
+    model_version: str | None,
+) -> dict:
     feature_names = list(ref_features[0].keys())
     results = []
 
@@ -199,15 +333,13 @@ def detect_feature_drift(
         })
 
     max_psi = max((r["psi"] for r in results), default=0.0)
-    drift_detected = max_psi >= psi_alert
-
     return {
         "status": "ok",
-        "model_version": latest_version,
+        "model_version": model_version,
         "reference_count": len(ref_features),
         "current_count": len(current_features),
         "features": results,
-        "drift_detected": drift_detected,
+        "drift_detected": max_psi >= psi_alert,
         "psi_warning": psi_warning,
         "psi_alert": psi_alert,
     }

@@ -20,6 +20,7 @@ from ..schemas import (
     ProjectResponse,
 )
 from ..services.config import DEFAULTS
+from ..settings import settings
 
 router = APIRouter(prefix="/api", tags=["ingest"])
 
@@ -71,9 +72,17 @@ def register_deployed_model(
     return model
 
 
+def _check_project_exists(db: Session, project_id: int) -> bool:
+    """モードに応じてプロジェクト存在確認を行う。"""
+    if settings.is_dataiku:
+        from ..dataiku_client import get_project_by_id
+        return get_project_by_id(project_id) is not None
+    return db.get(Project, project_id) is not None
+
+
 @router.get("/projects/{project_id}/config", response_model=ProjectConfigResponse)
 def get_config(project_id: int, db: Session = Depends(get_db)):
-    if not db.get(Project, project_id):
+    if not _check_project_exists(db, project_id):
         raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
     cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
     if cfg:
@@ -83,7 +92,7 @@ def get_config(project_id: int, db: Session = Depends(get_db)):
 
 @router.put("/projects/{project_id}/config", response_model=ProjectConfigResponse)
 def upsert_config(project_id: int, body: ProjectConfigUpdate, db: Session = Depends(get_db)):
-    if not db.get(Project, project_id):
+    if not _check_project_exists(db, project_id):
         raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
     cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
     if cfg:

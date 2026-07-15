@@ -31,6 +31,7 @@
 
       <!-- ページナビ -->
       <nav class="flex items-center gap-1">
+        <span class="text-xs text-gray-700 font-medium px-1">ML</span>
         <a href="/"
           class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
             {% if current_page == 'dashboard' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
@@ -41,6 +42,7 @@
             {% if current_page == 'summary' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
           サマリー
         </a>
+        <div class="w-px h-4 bg-gray-700 mx-1"></div>
         <a href="/manage"
           class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
             {% if current_page == 'manage' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
@@ -131,6 +133,7 @@
     document.getElementById('config-dialog').addEventListener('click', function(e) {
       if (e.target === this) this.close();
     });
+
   </script>
 </body>
 </html>

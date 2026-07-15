@@ -13,6 +13,7 @@ from ..models import InferenceLog, Project
 from ..services import config as config_svc
 from ..services import drift as drift_svc
 from ..services import metrics as metrics_svc
+from ..settings import settings
 
 _LOG_PAGE_SIZE = 50
 
@@ -22,13 +23,29 @@ _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "templates")
 templates = Jinja2Templates(directory=_TEMPLATE_DIR)
 
 
+def _get_projects(db: Session) -> list:
+    """モードに応じてプロジェクト一覧を取得する。"""
+    if settings.is_dataiku:
+        from ..dataiku_client import get_projects
+        return get_projects()
+    return db.query(Project).order_by(Project.created_at).all()
+
+
+def _get_project(db: Session, project_id: int):
+    """モードに応じて単一プロジェクトを取得する。"""
+    if settings.is_dataiku:
+        from ..dataiku_client import get_project_by_id
+        return get_project_by_id(project_id)
+    return db.get(Project, project_id)
+
+
 @router.get("/", response_class=HTMLResponse)
 async def index(
     request: Request,
     project_id: int | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    projects = db.query(Project).order_by(Project.created_at).all()
+    projects = _get_projects(db)
     initial_project_id = project_id or (projects[0].project_id if projects else None)
     return templates.TemplateResponse(
         request, "index.html", {"projects": projects, "initial_project_id": initial_project_id}
@@ -37,7 +54,7 @@ async def index(
 
 @router.get("/summary", response_class=HTMLResponse)
 async def summary_page(request: Request, db: Session = Depends(get_db)):
-    projects = db.query(Project).order_by(Project.created_at).all()
+    projects = _get_projects(db)
     return templates.TemplateResponse(request, "summary.html", {"projects": projects})
 
 
@@ -47,7 +64,7 @@ async def summary_panels(
     hours: int = Query(24),
     db: Session = Depends(get_db),
 ):
-    projects = db.query(Project).order_by(Project.created_at).all()
+    projects = _get_projects(db)
     rows = []
     for p in projects:
         cfg = config_svc.get_config(db, p.project_id)
@@ -77,7 +94,7 @@ async def all_panels(
     days: int = Query(7),
     db: Session = Depends(get_db),
 ):
-    project = db.get(Project, project_id)
+    project = _get_project(db, project_id)
     if not project:
         return HTMLResponse("<p class='text-gray-400 text-center py-8'>プロジェクトが見つかりません</p>")
 
@@ -118,13 +135,18 @@ async def all_panels(
 
 @router.get("/manage", response_class=HTMLResponse)
 async def manage_page(request: Request, db: Session = Depends(get_db)):
-    projects = db.query(Project).order_by(Project.created_at).all()
-    return templates.TemplateResponse(request, "manage.html", {"projects": projects})
+    projects = _get_projects(db)
+    return templates.TemplateResponse(
+        request, "manage.html", {
+            "projects": projects,
+            "app_mode": settings.app_mode.value,
+        }
+    )
 
 
 @router.get("/ui/project-list", response_class=HTMLResponse)
 async def project_list(request: Request, db: Session = Depends(get_db)):
-    projects = db.query(Project).order_by(Project.created_at).all()
+    projects = _get_projects(db)
     return templates.TemplateResponse(
         request, "partials/project_list.html", {"projects": projects}
     )
@@ -186,7 +208,7 @@ async def config_modal(
     project_id: int,
     db: Session = Depends(get_db),
 ):
-    project = db.get(Project, project_id)
+    project = _get_project(db, project_id)
     if not project:
         return HTMLResponse("<p class='text-red-400 p-4'>プロジェクトが見つかりません</p>")
     cfg = config_svc.get_config(db, project_id)
