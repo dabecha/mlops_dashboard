@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime as dt
 
@@ -17,6 +18,7 @@ from ..settings import settings
 
 _LOG_PAGE_SIZE = 50
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["ui"])
 
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "templates")
@@ -28,7 +30,10 @@ def _get_projects(db: Session) -> list:
     if settings.is_dataiku:
         from ..dataiku_client import get_projects
         return get_projects()
-    return db.query(Project).order_by(Project.created_at).all()
+    logger.info("_get_projects: local_dev モードで DB からプロジェクト一覧を取得")
+    projects = db.query(Project).order_by(Project.created_at).all()
+    logger.info("_get_projects: %d 件取得", len(projects))
+    return projects
 
 
 def _get_project(db: Session, project_id: int):
