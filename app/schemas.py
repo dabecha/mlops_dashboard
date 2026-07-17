@@ -57,7 +57,7 @@ class ReferenceLogCreate(BaseModel):
 
 
 class ReferenceLogResponse(BaseModel):
-    ref_id: int
+    log_id: int
     project_id: int
     model_id: Optional[int]
     actual_values: Optional[float]

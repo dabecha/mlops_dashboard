@@ -99,7 +99,7 @@ ML プロジェクトごとの閾値設定。未設定の場合はデフォル�
 
 | カラム | 型 | NULL | デフォルト | 説明 |
 |---|---|---|---|---|
-| `ref_id` | INTEGER | NO | auto | 主キー |
+| `log_id` | INTEGER | NO | auto | 主キー |
 | `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー |
 | `model_id` | INTEGER | YES | NULL | `m_deployed_models.model_id` への外部キー |
 | `feature_values` | TEXT | YES | NULL | 学習サンプルの特徴量 JSON（例: `{"age": 35.0, "amount": 5200.0}`） |
@@ -145,7 +145,7 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
     ▼                ▼                         ▼                        ▼
  project_configs   t_reference_logs       t_inference_logs         m_deployed_models
  ────────────────  ──────────────────     ──────────────────────── ────────────────────────────
-    id       INT PK PK ref_id  INTEGER    PK log_id     INTEGER    PK model_id        INTEGER
+    id       INT PK PK log_id  INTEGER    PK log_id     INTEGER    PK model_id        INTEGER
  FK project_id   UNIQ FK project_id INT  FK project_id INTEGER    FK project_id      INTEGER
     drift_window_size FK model_id  INT →    batch_log_id               model_version      VARCHAR(100)
     psi_warning       feature_values TEXT   request_timestamp          feature_dtypes     TEXT  -- JSON

@@ -62,7 +62,7 @@ class ReferenceLog(Base):
     """特徴量ドリフト検知用の学習データ参照ログ（1行 = 1サンプル）"""
     __tablename__ = "t_reference_logs"
 
-    ref_id = Column(Integer, primary_key=True, index=True)
+    log_id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("m_projects.project_id"), nullable=False, index=True)
     model_id = Column(Integer, ForeignKey("m_deployed_models.model_id"), nullable=True, index=True)
     feature_values = Column(Text, nullable=True)   # JSON: {"age": 35.0, "amount": 5200.0}
