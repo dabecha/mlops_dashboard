@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import DeployedModel, InferenceLog, Project, ProjectConfig
+from ..models import DeployedModel, InferenceLog, Project, ProjectConfig, ReferenceLog
 from ..schemas import (
     BulkDeleteLogsRequest,
     DeployedModelCreate,
@@ -18,6 +18,8 @@ from ..schemas import (
     ProjectConfigUpdate,
     ProjectCreate,
     ProjectResponse,
+    ReferenceLogCreate,
+    ReferenceLogResponse,
 )
 from ..services.config import DEFAULTS
 from ..settings import settings
@@ -61,15 +63,34 @@ def register_deployed_model(
     model = DeployedModel(
         project_id=project_id,
         model_version=body.model_version,
-        feature_values=json.dumps(body.feature_values) if body.feature_values else None,
         feature_dtypes=json.dumps(body.feature_dtypes) if body.feature_dtypes else None,
         feature_importance=json.dumps(body.feature_importance) if body.feature_importance else None,
-        actual_values=body.actual_values,
+        is_activate=body.is_activate,
     )
     db.add(model)
     db.commit()
     db.refresh(model)
     return model
+
+
+@router.post("/projects/{project_id}/reference-logs", response_model=ReferenceLogResponse, status_code=201)
+def register_reference_log(
+    project_id: int,
+    body: ReferenceLogCreate,
+    db: Session = Depends(get_db),
+):
+    if not db.get(Project, project_id):
+        raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+    ref_log = ReferenceLog(
+        project_id=project_id,
+        model_id=body.model_id,
+        feature_values=json.dumps(body.feature_values) if body.feature_values else None,
+        actual_values=body.actual_values,
+    )
+    db.add(ref_log)
+    db.commit()
+    db.refresh(ref_log)
+    return ref_log
 
 
 def _check_project_exists(db: Session, project_id: int) -> bool:
@@ -137,6 +158,7 @@ def log_inference(body: InferenceLogCreate, db: Session = Depends(get_db)):
 
     log = InferenceLog(
         project_id=project.project_id,
+        batch_log_id=body.batch_log_id,
         request_timestamp=body.request_timestamp or datetime.utcnow(),
         request_id=body.request_id,
         model_id=body.model_id,

@@ -46,6 +46,9 @@ class Settings:
         self.dku_ds_deployed_models: str = os.environ.get(
             "DKU_DATASET_DEPLOYED_MODELS", "m_deployed_models"
         )
+        self.dku_ds_reference_logs: str = os.environ.get(
+            "DKU_DATASET_REFERENCE_LOGS", "t_reference_logs"
+        )
 
     @property
     def is_local_dev(self) -> bool:

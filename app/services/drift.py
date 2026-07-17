@@ -6,7 +6,7 @@ import numpy as np
 from scipy import stats
 from sqlalchemy.orm import Session
 
-from ..models import DeployedModel, InferenceLog
+from ..models import DeployedModel, InferenceLog, ReferenceLog
 from ..settings import settings
 
 
@@ -119,23 +119,22 @@ def detect_feature_drift(
 
     latest_version = latest_model.model_version
 
-    ref_models = (
-        db.query(DeployedModel)
-        .filter(
-            DeployedModel.project_id == project_id,
-            DeployedModel.model_version == latest_version,
-        )
-        .all()
-    )
-
     feature_importance: dict[str, float] = {}
     if latest_model.feature_importance:
         feature_importance = json.loads(latest_model.feature_importance)
 
-    ref_features: list[dict] = []
-    for m in ref_models:
-        if m.feature_values:
-            ref_features.append(json.loads(m.feature_values))
+    ref_logs = (
+        db.query(ReferenceLog)
+        .filter(
+            ReferenceLog.project_id == project_id,
+            ReferenceLog.model_id == latest_model.model_id,
+            ReferenceLog.feature_values != None,  # noqa: E711
+        )
+        .limit(window_size)
+        .all()
+    )
+
+    ref_features: list[dict] = [json.loads(r.feature_values) for r in ref_logs]
 
     if not ref_features:
         return {
@@ -233,7 +232,7 @@ def _dku_detect_feature_drift(
     psi_warning: float,
     psi_alert: float,
 ) -> dict:
-    from ..dataiku_client import get_deployed_models_df, get_inference_logs_df, parse_json_col
+    from ..dataiku_client import get_deployed_models_df, get_inference_logs_df, get_reference_logs_df, parse_json_col
 
     models_df = get_deployed_models_df(project_id)
     if models_df.empty:
@@ -246,23 +245,27 @@ def _dku_detect_feature_drift(
         }
 
     models_df = models_df.sort_values("created_at", ascending=False)
-    latest_version = models_df.iloc[0]["model_version"]
+    latest_row = models_df.iloc[0]
+    latest_version = latest_row["model_version"]
+    latest_model_id = latest_row.get("model_id")
 
-    ref_rows = models_df[models_df["model_version"] == latest_version]
     feature_importance: dict[str, float] = {}
-    imp_raw = parse_json_col(models_df.iloc[0].get("feature_importance"))
+    imp_raw = parse_json_col(latest_row.get("feature_importance"))
     if imp_raw:
         feature_importance = imp_raw
 
+    ref_df = get_reference_logs_df(project_id, model_id=latest_model_id)
+    ref_df = ref_df[ref_df["feature_values"].notna()].head(window_size)
+
     ref_features = [
-        fv for row in ref_rows.itertuples()
-        if (fv := parse_json_col(getattr(row, "feature_values", None))) is not None
+        fv for fv_raw in ref_df["feature_values"]
+        if (fv := parse_json_col(fv_raw)) is not None
     ]
 
     if not ref_features:
         return {
             "status": "no_reference_features",
-            "message": "参照モデルに特徴量データがありません",
+            "message": "参照ログに特徴量データがありません",
             "features": [],
             "drift_detected": False,
             "model_version": latest_version,

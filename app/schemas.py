@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, Literal, Optional
 
-from pydantic import BaseModel, Field
+import json
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProjectCreate(BaseModel):
@@ -25,10 +27,9 @@ class ProjectResponse(BaseModel):
 class DeployedModelCreate(BaseModel):
     project_id: int
     model_version: Optional[str] = None
-    feature_values: Optional[Dict[str, Any]] = None
     feature_dtypes: Optional[Dict[str, str]] = None
     feature_importance: Optional[Dict[str, float]] = None
-    actual_values: Optional[float] = None
+    is_activate: bool = True
 
 
 class DeployedModelResponse(BaseModel):
@@ -36,13 +37,37 @@ class DeployedModelResponse(BaseModel):
     project_id: int
     model_version: Optional[str]
     feature_importance: Optional[Dict[str, float]]
+    is_activate: bool
     created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+    @field_validator("feature_importance", mode="before")
+    @classmethod
+    def parse_feature_importance(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
+
+
+class ReferenceLogCreate(BaseModel):
+    model_id: Optional[int] = None
+    feature_values: Optional[Dict[str, Any]] = None
+    actual_values: Optional[float] = None
+
+
+class ReferenceLogResponse(BaseModel):
+    ref_id: int
+    project_id: int
+    model_id: Optional[int]
+    actual_values: Optional[float]
 
     model_config = {"from_attributes": True}
 
 
 class InferenceLogCreate(BaseModel):
     project_name: str
+    batch_log_id: Optional[str] = None
     request_id: Optional[str] = None
     model_id: Optional[int] = None
     prediction_values: float
@@ -79,6 +104,7 @@ class BulkDeleteLogsRequest(BaseModel):
 class InferenceLogResponse(BaseModel):
     log_id: int
     project_id: int
+    batch_log_id: Optional[str]
     request_timestamp: datetime
     request_id: Optional[str]
     model_id: Optional[int]

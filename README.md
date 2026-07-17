@@ -37,8 +37,9 @@ SQLite ファイル。アプリ起動時に自動生成されます（`mlops.db`
 |---|---|---|
 | `m_projects` | マスタ | ML プロジェクト |
 | `project_configs` | 設定 | ML プロジェクト閾値設定 |
-| `m_deployed_models` | マスタ | デプロイ済みモデル・特徴量ドリフト参照データ |
+| `m_deployed_models` | マスタ | デプロイ済みモデル |
 | `t_inference_logs` | トランザクション | 推論リクエスト・結果ログ |
+| `t_reference_logs` | トランザクション | 学習データ・特徴量ドリフト参照データ |
 
 ---
 
@@ -52,7 +53,7 @@ ML プロジェクトのマスターテーブル。
 | `project_name` | VARCHAR(100) | NO | — | プロジェクト名（ユニーク）。Dataiku モードでは Dataiku プロジェクトキーとして使用 |
 | `description` | VARCHAR(500) | YES | NULL | 説明文 |
 | `task_type` | VARCHAR(20) | NO | `binary` | タスク種別: `binary` / `multi-class` / `multi-label` / `regression` |
-| `created_at` | DATETIME | NO | 現在時刻 | 登録日時（UTC） |
+| `created_at` | DATETIME | NO | 現在時刻 | 登録日時（日本時間） |
 
 ---
 
@@ -72,24 +73,37 @@ ML プロジェクトごとの閾値設定。未設定の場合はデフォル�
 | `accuracy_alert` | REAL | NO | `60.0` | 精度異常閾値（%） |
 | `mae_warning` | REAL | YES | NULL | MAE 警告閾値（回帰用） |
 | `mae_alert` | REAL | YES | NULL | MAE 異常閾値（回帰用） |
-| `updated_at` | DATETIME | NO | 現在時刻 | 最終更新日時（UTC） |
+| `updated_at` | DATETIME | NO | 現在時刻 | 最終更新日時（日本時間） |
 
 ---
 
 ### `m_deployed_models` テーブル
 
-デプロイ済みモデルの記録。1 サンプル = 1 行で学習データを蓄積し、特徴量ドリフトの参照分布として使用。
+デプロイ済みモデルの記録。モデルバージョンや特徴量メタ情報を管理する。
 
 | カラム | 型 | NULL | デフォルト | 説明 |
 |---|---|---|---|---|
 | `model_id` | INTEGER | NO | auto | 主キー |
 | `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー |
 | `model_version` | VARCHAR(100) | YES | NULL | モデルバージョン識別子 |
-| `feature_values` | TEXT | YES | NULL | 学習サンプルの特徴量 JSON（例: `{"age": 35.0, "amount": 5200.0}`） |
 | `feature_dtypes` | TEXT | YES | NULL | 特徴量データ型 JSON（例: `{"age": "float32"}`） |
 | `feature_importance` | TEXT | YES | NULL | 特徴量重要度 JSON（例: `{"age": 0.43, "amount": 0.57}`） |
+| `is_activate` | BOOLEAN | NO | — | モデル有効化フラグ |
+| `created_at` | DATETIME | NO | 現在時刻 | 登録日時（日本時間） |
+
+---
+
+### `t_reference_logs` テーブル
+
+デプロイ済みモデル学習データ。1 サンプル = 1 行で学習データを蓄積し、特徴量ドリフトの参照分布として使用。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| `ref_id` | INTEGER | NO | auto | 主キー |
+| `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー |
+| `model_id` | INTEGER | YES | NULL | `m_deployed_models.model_id` への外部キー |
+| `feature_values` | TEXT | YES | NULL | 学習サンプルの特徴量 JSON（例: `{"age": 35.0, "amount": 5200.0}`） |
 | `actual_values` | REAL | YES | NULL | 学習時の正解ラベル |
-| `created_at` | DATETIME | NO | 現在時刻 | 登録日時（UTC） |
 
 ---
 
@@ -101,7 +115,8 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
 |---|---|---|---|---|
 | `log_id` | INTEGER | NO | auto | 主キー |
 | `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー |
-| `request_timestamp` | DATETIME | NO | 現在時刻 | 推論実行日時（UTC） |
+| `batch_log_id` | VARCHAR(100) | YES | NULL | 推論バッチ単位の識別子 |
+| `request_timestamp` | DATETIME | NO | 現在時刻 | 推論実行日時（日本時間） |
 | `request_id` | VARCHAR(100) | YES | NULL | 呼び出し元が付与するリクエスト識別子 |
 | `model_id` | INTEGER | YES | NULL | `m_deployed_models.model_id` への外部キー |
 | `prediction_values` | REAL | NO | — | モデルの予測値（分類: 確率 0–1、回帰: 数値） |
@@ -110,6 +125,8 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
 | `is_error` | BOOLEAN | NO | `false` | エラー発生フラグ |
 | `feature_values` | TEXT | YES | NULL | 入力特徴量 JSON（例: `{"age": 35.0, "amount": 5200.0}`） |
 | `feature_dtypes` | TEXT | YES | NULL | 入力特徴量データ型 JSON |
+| `created_at` | DATETIME | NO | 現在時刻 | 登録日時（日本時間） |
+| `updated_at` | DATETIME | NO | 現在時刻 | 最終更新日時（日本時間） |
 
 ---
 
@@ -124,21 +141,24 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
     task_type     VARCHAR(20)   -- binary | multi-class | multi-label | regression
     created_at    DATETIME
     │
-    │ 1:1                        │ 1:N                    │ 1:N
-    ▼                            ▼                        ▼
- project_configs            t_inference_logs         m_deployed_models
- ────────────────────────   ──────────────────────── ────────────────────────────
-    id            INT  PK   PK log_id     INTEGER    PK model_id        INTEGER
- FK project_id    INT  UNIQ FK project_id INTEGER    FK project_id      INTEGER
-    drift_window_size  INT     request_timestamp      model_version      VARCHAR(100)
-    psi_warning   REAL        request_id             feature_values     TEXT  -- JSON
-    psi_alert     REAL     FK model_id   INTEGER →   feature_dtypes     TEXT  -- JSON
-    ks_alpha      REAL        prediction_values       feature_importance TEXT  -- JSON
-    accuracy_warning/alert     actual_values          actual_values      REAL
-    mae_warning/alert          response_time_ms       created_at         DATETIME
-    updated_at    DATETIME     is_error
-                               feature_values
-                               feature_dtypes
+    │ 1:1            │ 1:N                     │ 1:N                    │ 1:N
+    ▼                ▼                         ▼                        ▼
+ project_configs   t_reference_logs       t_inference_logs         m_deployed_models
+ ────────────────  ──────────────────     ──────────────────────── ────────────────────────────
+    id       INT PK PK ref_id  INTEGER    PK log_id     INTEGER    PK model_id        INTEGER
+ FK project_id   UNIQ FK project_id INT  FK project_id INTEGER    FK project_id      INTEGER
+    drift_window_size FK model_id  INT →    batch_log_id               model_version      VARCHAR(100)
+    psi_warning       feature_values TEXT   request_timestamp          feature_dtypes     TEXT  -- JSON
+    psi_alert         actual_values  REAL   request_id                 feature_importance TEXT  -- JSON
+    ks_alpha                            FK model_id   INTEGER →        is_activate        BOOLEAN
+    accuracy_warning/alert              prediction_values              created_at         DATETIME
+    mae_warning/alert                   actual_values
+    updated_at                          response_time_ms
+                                        is_error
+                                        feature_values
+                                        feature_dtypes
+                                        created_at
+                                        updated_at
 ```
 
 ---
@@ -160,19 +180,31 @@ Content-Type: application/json
 }
 ```
 
-### デプロイ済みモデル登録（特徴量ドリフトの参照データ）
+### デプロイ済みモデル登録
 
 ```bash
 POST /api/projects/{project_id}/models
 Content-Type: application/json
 
-# 学習データの1サンプルを1リクエストで送信。複数回呼び出すことで参照分布を構築する。
 {
   "project_id": 1,
   "model_version": "v1.2.0",
-  "feature_values": {"age": 35.0, "amount": 5200.0},     # 任意: 学習サンプル
   "feature_dtypes": {"age": "float32", "amount": "float32"},  # 任意
-  "feature_importance": {"age": 0.43, "amount": 0.57},   # 任意: 特徴量重要度
+  "feature_importance": {"age": 0.43, "amount": 0.57},        # 任意: 特徴量重要度
+  "is_activate": true                                          # 任意: 有効化フラグ（デフォルト: true）
+}
+```
+
+### 参照ログ登録（特徴量ドリフトの参照データ）
+
+```bash
+POST /api/projects/{project_id}/reference-logs
+Content-Type: application/json
+
+# 学習データの1サンプルを1リクエストで送信。複数回呼び出すことで参照分布を構築する。
+{
+  "model_id": 1,                                          # 任意: m_deployed_models.model_id
+  "feature_values": {"age": 35.0, "amount": 5200.0},     # 任意: 学習サンプル特徴量
   "actual_values": 1.0                                    # 任意: 正解ラベル
 }
 ```

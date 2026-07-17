@@ -157,6 +157,25 @@ def get_deployed_models_df(project_id: int):
     return df.reset_index(drop=True)
 
 
+def get_reference_logs_df(project_id: int, model_id: int | None = None):
+    """対象プロジェクトの t_reference_logs を取得する。"""
+    import pandas as pd
+    dku_project_key = _get_target_project_key(project_id)
+    if not dku_project_key:
+        return pd.DataFrame()
+
+    df = _fetch_df(settings.dku_ds_reference_logs, project_key=dku_project_key)
+    if df.empty:
+        return df
+
+    if "project_id" in df.columns:
+        df = df[df["project_id"] == project_id].copy()
+    if model_id is not None and "model_id" in df.columns:
+        df = df[df["model_id"] == model_id].copy()
+
+    return df.reset_index(drop=True)
+
+
 # ── ユーティリティ ───────────────────────────────────────────────────────────
 
 def _row_to_dict(row) -> dict:

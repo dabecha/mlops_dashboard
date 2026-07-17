@@ -12,7 +12,7 @@ import random
 from datetime import datetime, timedelta
 
 from app.database import Base, SessionLocal, engine
-from app.models import DeployedModel, InferenceLog, Project
+from app.models import DeployedModel, InferenceLog, Project, ReferenceLog
 
 random.seed(42)
 
@@ -23,16 +23,14 @@ except ImportError:
     pass
 
 
-def make_deployed_model_samples(
+def make_reference_log_samples(
     project_id: int,
-    model_version: str,
+    model_id: int,
     feature_names: list[str],
-    feature_importance: dict[str, float],
     n_samples: int,
     feature_distributions: dict[str, tuple],
-    created_at: datetime,
-) -> list[DeployedModel]:
-    """学習データのサンプルを m_deployed_models に登録する。"""
+) -> list[ReferenceLog]:
+    """学習データのサンプルを t_reference_logs に登録する。"""
     records = []
     for _ in range(n_samples):
         fv = {}
@@ -43,12 +41,10 @@ def make_deployed_model_samples(
             elif dist[0] == "uniform":
                 fv[feat] = round(random.uniform(dist[1], dist[2]), 4)
         records.append(
-            DeployedModel(
+            ReferenceLog(
                 project_id=project_id,
-                model_version=model_version,
+                model_id=model_id,
                 feature_values=json.dumps(fv),
-                feature_importance=json.dumps(feature_importance),
-                created_at=created_at,
             )
         )
     return records
@@ -124,6 +120,7 @@ def main() -> None:
     db = SessionLocal()
     try:
         db.query(InferenceLog).delete()
+        db.query(ReferenceLog).delete()
         db.query(DeployedModel).delete()
         db.query(Project).delete()
         db.commit()
@@ -141,6 +138,7 @@ def main() -> None:
                 "model_version": "v1.2.0",
                 "feature_names": ["amount", "age", "transaction_count", "distance_from_home"],
                 "feature_importance": {"amount": 0.42, "age": 0.25, "transaction_count": 0.20, "distance_from_home": 0.13},
+                "feature_dtypes": {"amount": "float32", "age": "float32", "transaction_count": "int32", "distance_from_home": "float32"},
                 "feature_distributions": {
                     "amount": ("normal", 5000.0, 2000.0),
                     "age": ("normal", 38.0, 10.0),
@@ -161,6 +159,7 @@ def main() -> None:
                 "model_version": "v2.0.1",
                 "feature_names": ["area_sqm", "rooms", "age_years", "distance_station"],
                 "feature_importance": {"area_sqm": 0.50, "rooms": 0.20, "age_years": 0.18, "distance_station": 0.12},
+                "feature_dtypes": {"area_sqm": "float32", "rooms": "int32", "age_years": "float32", "distance_station": "float32"},
                 "feature_distributions": {
                     "area_sqm": ("normal", 75.0, 20.0),
                     "rooms": ("uniform", 1.0, 6.0),
@@ -181,6 +180,7 @@ def main() -> None:
                 "model_version": "v0.9.3",
                 "feature_names": ["tenure_months", "monthly_charges", "num_products", "support_calls"],
                 "feature_importance": {"tenure_months": 0.35, "monthly_charges": 0.30, "num_products": 0.20, "support_calls": 0.15},
+                "feature_dtypes": {"tenure_months": "int32", "monthly_charges": "float32", "num_products": "int32", "support_calls": "int32"},
                 "feature_distributions": {
                     "tenure_months": ("normal", 30.0, 18.0),
                     "monthly_charges": ("normal", 65.0, 20.0),
@@ -200,6 +200,7 @@ def main() -> None:
             model_version = pdef.pop("model_version")
             feature_names = pdef.pop("feature_names")
             feature_importance = pdef.pop("feature_importance")
+            feature_dtypes = pdef.pop("feature_dtypes")
             feature_distributions = pdef.pop("feature_distributions")
             n_ref_samples = pdef.pop("n_ref_samples")
 
@@ -207,31 +208,31 @@ def main() -> None:
             db.add(project)
             db.flush()
 
-            # デプロイ済みモデルの参照サンプルを登録
-            model_created_at = datetime.utcnow() - timedelta(days=days + 1)
-            ref_records = make_deployed_model_samples(
+            # デプロイ済みモデルを 1 レコード登録
+            deployed_model = DeployedModel(
                 project_id=project.project_id,
                 model_version=model_version,
-                feature_names=feature_names,
-                feature_importance=feature_importance,
-                n_samples=n_ref_samples,
-                feature_distributions=feature_distributions,
-                created_at=model_created_at,
+                feature_dtypes=json.dumps(feature_dtypes),
+                feature_importance=json.dumps(feature_importance),
+                is_activate=True,
+                created_at=datetime.utcnow() - timedelta(days=days + 1),
             )
-            db.bulk_save_objects(ref_records)
+            db.add(deployed_model)
             db.flush()
 
-            # 最初のモデルレコードを取得して model_id を参照
-            first_model = (
-                db.query(DeployedModel)
-                .filter(DeployedModel.project_id == project.project_id)
-                .first()
+            # 参照ログ（学習サンプル）を t_reference_logs に登録
+            ref_records = make_reference_log_samples(
+                project_id=project.project_id,
+                model_id=deployed_model.model_id,
+                feature_names=feature_names,
+                n_samples=n_ref_samples,
+                feature_distributions=feature_distributions,
             )
-            model_id = first_model.model_id if first_model else None
+            db.bulk_save_objects(ref_records)
 
             logs = make_logs(
                 project_id=project.project_id,
-                model_id=model_id,
+                model_id=deployed_model.model_id,
                 n=n,
                 days=days,
                 base_latency=base_latency,

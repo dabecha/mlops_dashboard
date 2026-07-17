@@ -17,6 +17,7 @@ class Project(Base):
     logs = relationship("InferenceLog", back_populates="project", cascade="all, delete-orphan")
     config = relationship("ProjectConfig", back_populates="project", uselist=False, cascade="all, delete-orphan")
     deployed_models = relationship("DeployedModel", back_populates="project", cascade="all, delete-orphan")
+    reference_logs = relationship("ReferenceLog", back_populates="project", cascade="all, delete-orphan")
 
 
 class ProjectConfig(Base):
@@ -47,14 +48,28 @@ class DeployedModel(Base):
     model_id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("m_projects.project_id"), nullable=False, index=True)
     model_version = Column(String(100), nullable=True)
-    feature_values = Column(Text, nullable=True)    # JSON: one training sample {"age": 35.0, ...}
-    feature_dtypes = Column(Text, nullable=True)    # JSON: {"age": "float32", ...}
-    feature_importance = Column(Text, nullable=True)  # JSON: {"age": 0.43, ...}
-    actual_values = Column(Float, nullable=True)
+    feature_dtypes = Column(Text, nullable=True)       # JSON: {"age": "float32", ...}
+    feature_importance = Column(Text, nullable=True)   # JSON: {"age": 0.43, ...}
+    is_activate = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     project = relationship("Project", back_populates="deployed_models")
     logs = relationship("InferenceLog", back_populates="deployed_model")
+    reference_logs = relationship("ReferenceLog", back_populates="deployed_model")
+
+
+class ReferenceLog(Base):
+    """特徴量ドリフト検知用の学習データ参照ログ（1行 = 1サンプル）"""
+    __tablename__ = "t_reference_logs"
+
+    ref_id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("m_projects.project_id"), nullable=False, index=True)
+    model_id = Column(Integer, ForeignKey("m_deployed_models.model_id"), nullable=True, index=True)
+    feature_values = Column(Text, nullable=True)   # JSON: {"age": 35.0, "amount": 5200.0}
+    actual_values = Column(Float, nullable=True)
+
+    project = relationship("Project", back_populates="reference_logs")
+    deployed_model = relationship("DeployedModel", back_populates="reference_logs")
 
 
 class InferenceLog(Base):
@@ -62,6 +77,7 @@ class InferenceLog(Base):
 
     log_id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("m_projects.project_id"), nullable=False, index=True)
+    batch_log_id = Column(String(100), nullable=True, index=True)
     request_timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     request_id = Column(String(100), nullable=True)
     model_id = Column(Integer, ForeignKey("m_deployed_models.model_id"), nullable=True, index=True)
@@ -71,6 +87,8 @@ class InferenceLog(Base):
     is_error = Column(Boolean, default=False)
     feature_values = Column(Text, nullable=True)    # JSON: {"age": 35.0, ...}
     feature_dtypes = Column(Text, nullable=True)    # JSON: {"age": "float32", ...}
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     project = relationship("Project", back_populates="logs")
     deployed_model = relationship("DeployedModel", back_populates="logs")
