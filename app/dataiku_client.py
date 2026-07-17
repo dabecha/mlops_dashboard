@@ -20,10 +20,13 @@ dataiku パッケージは DSS 環境内でのみ利用可能なため、遅延�
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from types import SimpleNamespace
 
 from .settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 # ── 内部: DataFrame 取得 ─────────────────────────────────────────────────────
@@ -95,10 +98,17 @@ def get_projects() -> list[SimpleNamespace]:
     テンプレートが project.project_id, project.project_name 等にアクセスできるよう
     SimpleNamespace で返す。
     """
-    df = _fetch_df(settings.dku_ds_projects)
+    logger.info("get_projects: dataset=%s project=%s", settings.dku_ds_projects, settings.dku_mgmt_project_key)
+    try:
+        df = _fetch_df(settings.dku_ds_projects)
+    except Exception:
+        logger.exception("get_projects: データセット取得に失敗しました")
+        raise
     df["created_at"] = _to_naive_utc(df["created_at"])
     df = df.sort_values("created_at").reset_index(drop=True)
-    return [SimpleNamespace(**_row_to_dict(row)) for _, row in df.iterrows()]
+    projects = [SimpleNamespace(**_row_to_dict(row)) for _, row in df.iterrows()]
+    logger.info("get_projects: %d 件取得", len(projects))
+    return projects
 
 
 def get_project_by_id(project_id: int) -> SimpleNamespace | None:
