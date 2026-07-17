@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.database import Base, engine
-from app.routers import agent_ingest, agent_ui, ingest, ui
+from app.routers import ingest, ui
 from app.settings import settings
 
 logger = logging.getLogger("mlops_dashboard")
@@ -37,5 +37,3 @@ app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 app.include_router(ingest.router)
 app.include_router(ui.router)
-app.include_router(agent_ingest.router)
-app.include_router(agent_ui.router)

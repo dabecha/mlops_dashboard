@@ -31,7 +31,6 @@
 
       <!-- ページナビ -->
       <nav class="flex items-center gap-1">
-        <span class="text-xs text-gray-700 font-medium px-1">ML</span>
         <a href="/"
           class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
             {% if current_page == 'dashboard' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
@@ -42,19 +41,6 @@
             {% if current_page == 'summary' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
           サマリー
         </a>
-        <div class="w-px h-4 bg-gray-700 mx-1"></div>
-        <span class="text-xs text-gray-700 font-medium px-1">Agent</span>
-        <a href="/agents"
-          class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
-            {% if current_page == 'agents' %}bg-violet-600 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
-          詳細
-        </a>
-        <a href="/agents/summary"
-          class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
-            {% if current_page == 'agents_summary' %}bg-violet-600 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
-          サマリー
-        </a>
-        <div class="w-px h-4 bg-gray-700 mx-1"></div>
         <a href="/manage"
           class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
             {% if current_page == 'manage' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
@@ -74,13 +60,6 @@
   <main class="max-w-7xl mx-auto px-6 py-6">
     {% block content %}{% endblock %}
   </main>
-
-  <!-- エージェント閾値設定モーダル（全ページ共通） -->
-  <dialog id="agent-config-dialog"
-    class="bg-gray-900 border border-gray-800 rounded-xl p-0 w-full max-w-lg shadow-2xl open:animate-none"
-    style="color: inherit;">
-    <div id="agent-config-modal-body"><!-- htmx でロード --></div>
-  </dialog>
 
   <!-- フッター -->
   <footer class="fixed bottom-4 right-4">
@@ -150,55 +129,6 @@
 
     // backdrop クリックで閉じる
     document.getElementById('config-dialog').addEventListener('click', function(e) {
-      if (e.target === this) this.close();
-    });
-
-    // ── エージェント設定モーダル ──────────────────────────────────────────
-    function openAgentConfigModal(projectId, onSuccess) {
-      window._agentConfigOnSuccess = onSuccess || null;
-      htmx.ajax('GET', '/ui/agent-config-modal/' + projectId, {
-        target: '#agent-config-modal-body',
-        swap: 'innerHTML'
-      });
-      document.getElementById('agent-config-dialog').showModal();
-    }
-
-    async function handleAgentConfigSave(event, projectId) {
-      event.preventDefault();
-      const form = event.target;
-      const data = Object.fromEntries(new FormData(form));
-      const payload = {
-        drift_window_size:    parseInt(data.drift_window_size, 10),
-        psi_warning:          parseFloat(data.psi_warning),
-        psi_alert:            parseFloat(data.psi_alert),
-        success_rate_warning: parseFloat(data.success_rate_warning),
-        success_rate_alert:   parseFloat(data.success_rate_alert),
-        quality_warning:      data.quality_warning !== '' ? parseFloat(data.quality_warning) : null,
-        quality_alert:        data.quality_alert   !== '' ? parseFloat(data.quality_alert)   : null,
-      };
-      const msgEl = document.getElementById('agent-config-save-msg');
-      try {
-        const resp = await fetch('/agent-api/projects/' + projectId + '/config', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (resp.ok) {
-          if (msgEl) { msgEl.textContent = '保存しました'; msgEl.className = 'text-xs text-emerald-400'; }
-          setTimeout(() => {
-            document.getElementById('agent-config-dialog').close();
-            if (window._agentConfigOnSuccess) window._agentConfigOnSuccess();
-          }, 600);
-        } else {
-          const err = await resp.json();
-          if (msgEl) { msgEl.textContent = 'エラー: ' + (err.detail || resp.status); msgEl.className = 'text-xs text-red-400'; }
-        }
-      } catch (e) {
-        if (msgEl) { msgEl.textContent = '通信エラーが発生しました'; msgEl.className = 'text-xs text-red-400'; }
-      }
-    }
-
-    document.getElementById('agent-config-dialog').addEventListener('click', function(e) {
       if (e.target === this) this.close();
     });
   </script>
