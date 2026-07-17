@@ -1,0 +1,59 @@
+{% if not projects %}
+<div class="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center text-gray-500 text-sm">
+  エージェントプロジェクトが登録されていません
+</div>
+{% else %}
+<div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-800 text-xs text-gray-500 uppercase tracking-wider">
+        <th class="text-left px-4 py-3 font-medium">ID</th>
+        <th class="text-left px-4 py-3 font-medium">プロジェクト名</th>
+        <th class="text-left px-4 py-3 font-medium">説明</th>
+        <th class="text-left px-4 py-3 font-medium">種別</th>
+        <th class="text-left px-4 py-3 font-medium">モデル</th>
+        <th class="text-left px-4 py-3 font-medium">作成日時 (UTC)</th>
+        <th class="px-4 py-3 w-12"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-800">
+      {% for p in projects %}
+      <tr class="hover:bg-gray-800/50 transition-colors">
+        <td class="px-4 py-3 text-gray-500 font-mono text-xs">{{ p.project_id }}</td>
+        <td class="px-4 py-3">
+          <a href="/agents?project_id={{ p.project_id }}"
+            class="font-medium text-white hover:text-violet-300 transition-colors">
+            {{ p.project_name }}
+          </a>
+        </td>
+        <td class="px-4 py-3 text-gray-400 text-xs max-w-xs">
+          <span class="block truncate" title="{{ p.description or '' }}">{{ p.description or '—' }}</span>
+        </td>
+        <td class="px-4 py-3">
+          {% if p.agent_type == 'llm' %}
+          <span class="px-2 py-0.5 rounded text-xs font-medium bg-violet-900 text-violet-300">LLM</span>
+          {% elif p.agent_type == 'tool' %}
+          <span class="px-2 py-0.5 rounded text-xs font-medium bg-indigo-900 text-indigo-300">ツール</span>
+          {% else %}
+          <span class="px-2 py-0.5 rounded text-xs font-medium bg-amber-900 text-amber-300">マルチ</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-gray-500 font-mono text-xs">{{ p.model_name or '—' }}</td>
+        <td class="px-4 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">
+          {{ p.created_at.strftime('%Y-%m-%d %H:%M') }}
+        </td>
+        <td class="px-4 py-3 text-right">
+          <button onclick="deleteAgentProject({{ p.project_id }}, '{{ p.project_name }}')"
+            class="text-red-600 hover:text-red-400 transition-colors p-1" title="削除">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+            </svg>
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}

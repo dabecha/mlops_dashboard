@@ -73,6 +73,149 @@
     </div>
   </section>
 
+  <!-- ========== エージェントプロジェクト管理 ========== -->
+  <section>
+    <h2 class="text-base font-semibold text-white mb-5 flex items-center gap-2 pb-3 border-b border-gray-800">
+      <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+      </svg>
+      エージェントプロジェクト管理
+    </h2>
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <h3 class="text-sm font-medium text-gray-300 mb-4">新規登録</h3>
+        <form id="agent-project-create-form" onsubmit="handleAgentProjectCreate(event)" class="space-y-3">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">プロジェクト名 <span class="text-red-400">*</span></label>
+            <input type="text" name="project_name" required maxlength="100"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-violet-500 focus:border-violet-500 placeholder-gray-600"
+              placeholder="例: customer-support-agent">
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">説明</label>
+            <textarea name="description" maxlength="500" rows="2"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-violet-500 focus:border-violet-500 resize-none placeholder-gray-600"
+              placeholder="任意"></textarea>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">種別 <span class="text-red-400">*</span></label>
+            <select name="agent_type"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-violet-500 focus:border-violet-500">
+              <option value="tool">ツール使用エージェント</option>
+              <option value="llm">LLM 単体呼び出し</option>
+              <option value="multi">マルチエージェント</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">モデル名</label>
+            <input type="text" name="model_name" maxlength="100"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-violet-500 focus:border-violet-500 placeholder-gray-600"
+              placeholder="例: claude-sonnet-4-6">
+          </div>
+          <div class="flex items-center gap-3 pt-1">
+            <button type="submit"
+              class="bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+              登録
+            </button>
+            <p id="agent-project-create-msg" class="text-xs"></p>
+          </div>
+        </form>
+      </div>
+
+      <div class="lg:col-span-3"
+        id="agent-project-list"
+        hx-get="/ui/agent-project-list"
+        hx-trigger="load">
+        <div class="flex items-center gap-2 text-gray-500 text-sm p-4">
+          <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+          </svg>
+          読み込み中…
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== エージェントタスク削除 ========== -->
+  <section>
+    <h2 class="text-base font-semibold text-white mb-5 flex items-center gap-2 pb-3 border-b border-gray-800">
+      <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      エージェントタスク管理
+    </h2>
+
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-4">
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">エージェント <span class="text-red-400">*</span></label>
+          <select id="agent-task-project-select"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-violet-500 focus:border-violet-500">
+            {% if agent_projects %}
+              {% for p in agent_projects %}
+              <option value="{{ p.project_id }}">{{ p.project_name }}</option>
+              {% endfor %}
+            {% else %}
+              <option value="">（プロジェクトなし）</option>
+            {% endif %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">開始日時 (UTC)</label>
+          <input type="datetime-local" id="agent-task-from-dt"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-violet-500 focus:border-violet-500">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">終了日時 (UTC)</label>
+          <input type="datetime-local" id="agent-task-to-dt"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-violet-500 focus:border-violet-500">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">タスク名</label>
+          <input type="text" id="agent-task-name-filter" placeholder="部分一致"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-violet-500 focus:border-violet-500 placeholder-gray-600">
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">ステータス</label>
+          <select id="agent-task-status-filter"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-violet-500 focus:border-violet-500">
+            <option value="">全て</option>
+            <option value="success">成功</option>
+            <option value="failure">失敗</option>
+            <option value="error">エラー</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 mt-4">
+        <button onclick="searchAgentTasks(1)"
+          class="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          検索
+        </button>
+        <span class="text-xs text-gray-600 htmx-indicator" id="agent-task-loading">
+          <svg class="w-4 h-4 animate-spin inline" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+          </svg>
+          読み込み中…
+        </span>
+      </div>
+    </div>
+
+    <div id="agent-task-list">
+      <p class="text-gray-600 text-sm text-center py-10 bg-gray-900/50 border border-gray-800 rounded-xl">
+        条件を設定して「検索」を押してください
+      </p>
+    </div>
+  </section>
+
   <!-- ========== 推論ログ管理 ========== -->
   <section>
     <h2 class="text-base font-semibold text-white mb-5 flex items-center gap-2 pb-3 border-b border-gray-800">
@@ -158,6 +301,116 @@
 
 {% block scripts %}
 <script>
+  // ── エージェントプロジェクト管理 ────────────────────────────────────────
+  async function handleAgentProjectCreate(event) {
+    event.preventDefault();
+    const form = event.target;
+    const data = Object.fromEntries(new FormData(form));
+    const msgEl = document.getElementById('agent-project-create-msg');
+    try {
+      const resp = await fetch('/agent-api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (resp.ok) {
+        const project = await resp.json();
+        msgEl.textContent = '登録しました';
+        msgEl.className = 'text-xs text-emerald-400';
+        form.reset();
+        htmx.ajax('GET', '/ui/agent-project-list', { target: '#agent-project-list' });
+        _addAgentProjectOption(project);
+        setTimeout(() => { msgEl.textContent = ''; }, 3000);
+      } else {
+        const err = await resp.json();
+        msgEl.textContent = 'エラー: ' + (err.detail || resp.status);
+        msgEl.className = 'text-xs text-red-400';
+      }
+    } catch (e) {
+      msgEl.textContent = '通信エラー';
+      msgEl.className = 'text-xs text-red-400';
+    }
+  }
+
+  function _addAgentProjectOption(project) {
+    const select = document.getElementById('agent-task-project-select');
+    const placeholder = select.querySelector('option[value=""]');
+    if (placeholder) placeholder.remove();
+    const opt = document.createElement('option');
+    opt.value = project.project_id;
+    opt.textContent = project.project_name;
+    select.appendChild(opt);
+  }
+
+  async function deleteAgentProject(projectId, projectName) {
+    if (!confirm(`「${projectName}」を削除しますか？\n\n関連するすべてのタスク・ステップも削除されます。`)) return;
+    const resp = await fetch('/agent-api/projects/' + projectId, { method: 'DELETE' });
+    if (resp.ok) {
+      htmx.ajax('GET', '/ui/agent-project-list', { target: '#agent-project-list' });
+      const select = document.getElementById('agent-task-project-select');
+      const opt = select.querySelector(`option[value="${projectId}"]`);
+      if (opt) opt.remove();
+      if (select.options.length === 0) {
+        const ph = document.createElement('option');
+        ph.value = '';
+        ph.textContent = '（プロジェクトなし）';
+        select.appendChild(ph);
+      }
+      document.getElementById('agent-task-list').innerHTML =
+        '<p class="text-gray-600 text-sm text-center py-10 bg-gray-900/50 border border-gray-800 rounded-xl">条件を設定して「検索」を押してください</p>';
+    } else {
+      alert('削除に失敗しました');
+    }
+  }
+
+  function searchAgentTasks(page) {
+    const projectId = document.getElementById('agent-task-project-select').value;
+    if (!projectId) { alert('エージェントプロジェクトを選択してください'); return; }
+    const params = new URLSearchParams({ project_id: projectId, page: page || 1 });
+    const fromDt  = document.getElementById('agent-task-from-dt').value;
+    const toDt    = document.getElementById('agent-task-to-dt').value;
+    const name    = document.getElementById('agent-task-name-filter').value.trim();
+    const status  = document.getElementById('agent-task-status-filter').value;
+    if (fromDt) params.set('from_dt', fromDt);
+    if (toDt)   params.set('to_dt', toDt);
+    if (name)   params.set('task_name_filter', name);
+    if (status) params.set('status_filter', status);
+    htmx.ajax('GET', '/ui/agent-task-list?' + params.toString(), {
+      target: '#agent-task-list',
+      indicator: '#agent-task-loading',
+    });
+  }
+
+  async function deleteAgentTask(taskId) {
+    if (!confirm('このタスク（ID: ' + taskId + '）を削除しますか？')) return;
+    const resp = await fetch('/agent-api/tasks/' + taskId, { method: 'DELETE' });
+    if (resp.ok) {
+      document.getElementById('agent-task-row-' + taskId)?.remove();
+    } else {
+      alert('削除に失敗しました');
+    }
+  }
+
+  async function deleteSelectedAgentTasks() {
+    const checked = [...document.querySelectorAll('.agent-task-checkbox:checked')].map(el => parseInt(el.value));
+    if (!checked.length) { alert('削除するタスクを選択してください'); return; }
+    if (!confirm(checked.length + ' 件のタスクを削除しますか？')) return;
+    const resp = await fetch('/agent-api/tasks/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_ids: checked }),
+    });
+    if (resp.ok) {
+      checked.forEach(id => document.getElementById('agent-task-row-' + id)?.remove());
+    } else {
+      alert('削除に失敗しました');
+    }
+  }
+
+  function toggleAllAgentTasks(master) {
+    document.querySelectorAll('.agent-task-checkbox').forEach(cb => cb.checked = master.checked);
+  }
+
   // ── ML プロジェクト管理 ──────────────────────────────────────────────────
   async function handleProjectCreate(event) {
     event.preventDefault();
