@@ -9,7 +9,7 @@ dev / production モードで Dataiku データセットから pandas DataFrame 
     - m_agent_projects  … エージェントプロジェクト一覧
     - m_agent_ref_data  … エージェントドリフト参照データ
 
-  各 Ops 対象プロジェクト (m_projects.project_name = Dataiku プロジェクトキー)
+  各 Ops 対象プロジェクト (m_projects.project_id = Dataiku プロジェクトキー)
     - t_inference_logs  … 推論ログ
     - m_deployed_models … デプロイ済みモデル
     - t_agent_tasks     … エージェントタスクログ
@@ -100,14 +100,15 @@ def _to_naive_utc(series):
 def _get_target_project_key(project_id: int) -> str | None:
     """project_id に対応する Dataiku プロジェクトキーを返す。
 
-    m_projects.project_name を Dataiku プロジェクトキーとして扱う。
-    管理プロジェクト (dku_mgmt_project_key) から m_projects を取得して解決する。
+    Dataiku プロジェクトキーは project_id と一致する。
+    管理プロジェクト (dku_mgmt_project_key) の m_projects に登録済みか確認したうえで、
+    project_id を文字列キーとして返す（未登録なら None）。
     """
     df = _fetch_df(settings.dku_ds_projects)
     row = df[df["project_id"] == project_id]
     if row.empty:
         return None
-    return str(row.iloc[0]["project_name"])
+    return str(project_id)
 
 
 # ── プロジェクト一覧（管理プロジェクトから取得） ──────────────────────────────
@@ -166,7 +167,7 @@ def delete_project(project_id: int) -> bool:
 def get_inference_logs_df(project_id: int, since: datetime | None = None):
     """対象プロジェクトの t_inference_logs を取得する。
 
-    m_projects.project_name を Dataiku プロジェクトキーとして解決し、
+    project_id を Dataiku プロジェクトキーとして解決し、
     そのプロジェクト内の t_inference_logs データセットを取得する。
     """
     import pandas as pd
@@ -258,7 +259,7 @@ def delete_inference_logs(project_id: int, log_ids: list[int]) -> int:
 def get_deployed_models_df(project_id: int):
     """対象プロジェクトの m_deployed_models を取得する。
 
-    m_projects.project_name を Dataiku プロジェクトキーとして解決し、
+    project_id を Dataiku プロジェクトキーとして解決し、
     そのプロジェクト内の m_deployed_models データセットを取得する。
     """
     import pandas as pd
