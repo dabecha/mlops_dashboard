@@ -3,6 +3,9 @@ from __future__ import annotations
 import os
 from enum import Enum
 
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class AppMode(str, Enum):
     LOCAL_DEV = "local_dev"
