@@ -49,7 +49,7 @@
 
 <!-- サマリーパネル（htmx 自動更新） -->
 <div id="summary-content"
-     hx-get="/ui/summary-panels"
+     hx-get="./ui/summary-panels"
      hx-vals="js:{hours: document.getElementById('hours-select').value, drift_window: 100}"
      hx-trigger="load, every 60s"
      hx-indicator="#loading-indicator">
@@ -78,7 +78,7 @@
 <script>
   function loadSummary() {
     const hours = document.getElementById('hours-select').value;
-    htmx.ajax('GET', '/ui/summary-panels', {
+    htmx.ajax('GET', './ui/summary-panels', {
       target: '#summary-content',
       indicator: '#loading-indicator',
       values: { hours: hours, drift_window: 100 }

@@ -72,7 +72,7 @@
 </form>
 
 <div id="dashboard-content"
-     hx-get="/ui/panels"
+     hx-get="./ui/panels"
      hx-include="#filter-form"
      hx-trigger="load, every 30s"
      hx-indicator="#loading-indicator">
@@ -104,7 +104,7 @@
     if (!projectId) return;
     document.getElementById('project-id-hidden').value = projectId;
     document.getElementById('hours-hidden').value = hours;
-    htmx.ajax('GET', '/ui/panels', {
+    htmx.ajax('GET', './ui/panels', {
       target: '#dashboard-content',
       indicator: '#loading-indicator',
       values: { project_id: projectId, hours: hours, days: 7 }

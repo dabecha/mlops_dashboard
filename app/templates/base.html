@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}MLOps Dashboard{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="/static/js/htmx.min.js"></script>
-  <script src="/static/js/chart.umd.min.js"></script>
+  <script src="./static/js/htmx.min.js"></script>
+  <script src="./static/js/chart.umd.min.js"></script>
   <style>
     .htmx-indicator { display: none; }
     .htmx-request .htmx-indicator { display: inline-block; }
@@ -31,17 +31,17 @@
 
       <!-- ページナビ -->
       <nav class="flex items-center gap-1">
-        <a href="/"
+        <a href="./"
           class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
             {% if current_page == 'dashboard' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
           詳細
         </a>
-        <a href="/summary"
+        <a href="./summary"
           class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
             {% if current_page == 'summary' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
           サマリー
         </a>
-        <a href="/manage"
+        <a href="./manage"
           class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
             {% if current_page == 'manage' %}bg-indigo-600 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
           管理
@@ -63,7 +63,7 @@
 
   <!-- フッター -->
   <footer class="fixed bottom-4 right-4">
-    <a href="/docs" target="_blank"
+    <a href="./docs" target="_blank"
       class="text-xs text-gray-600 hover:text-gray-400 transition-colors bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
       API Docs
     </a>
@@ -82,7 +82,7 @@
     // モーダルを開く（ページ側から onSuccess コールバックを渡す）
     function openConfigModal(projectId, onSuccess) {
       window._configOnSuccess = onSuccess || null;
-      htmx.ajax('GET', '/ui/config-modal/' + projectId, {
+      htmx.ajax('GET', './ui/config-modal/' + projectId, {
         target: '#config-modal-body',
         swap: 'innerHTML'
       });
@@ -107,7 +107,7 @@
 
       const msgEl = document.getElementById('config-save-msg');
       try {
-        const resp = await fetch('/api/projects/' + projectId + '/config', {
+        const resp = await fetch('./api/projects/' + projectId + '/config', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

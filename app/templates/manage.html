@@ -60,7 +60,7 @@
       <!-- プロジェクト一覧（htmx） -->
       <div class="lg:col-span-3"
         id="project-list"
-        hx-get="/ui/project-list"
+        hx-get="./ui/project-list"
         hx-trigger="load">
         <div class="flex items-center gap-2 text-gray-500 text-sm p-4">
           <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -164,7 +164,7 @@
     const data = Object.fromEntries(new FormData(form));
     const msgEl = document.getElementById('project-create-msg');
     try {
-      const resp = await fetch('/api/projects', {
+      const resp = await fetch('./api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -174,7 +174,7 @@
         msgEl.textContent = '登録しました';
         msgEl.className = 'text-xs text-emerald-400';
         form.reset();
-        htmx.ajax('GET', '/ui/project-list', { target: '#project-list' });
+        htmx.ajax('GET', './ui/project-list', { target: '#project-list' });
         _addProjectOption(project);
         setTimeout(() => { msgEl.textContent = ''; }, 3000);
       } else {
@@ -200,9 +200,9 @@
 
   async function deleteProject(projectId, projectName) {
     if (!confirm(`「${projectName}」を削除しますか？\n\n関連するすべての推論ログも削除されます。`)) return;
-    const resp = await fetch('/api/projects/' + projectId, { method: 'DELETE' });
+    const resp = await fetch('./api/projects/' + projectId, { method: 'DELETE' });
     if (resp.ok) {
-      htmx.ajax('GET', '/ui/project-list', { target: '#project-list' });
+      htmx.ajax('GET', './ui/project-list', { target: '#project-list' });
       const select = document.getElementById('log-project-select');
       const opt = select.querySelector(`option[value="${projectId}"]`);
       if (opt) opt.remove();
@@ -231,7 +231,7 @@
     if (toDt)   params.set('to_dt', toDt);
     if (reqId)  params.set('request_id_filter', reqId);
     if (isErr)  params.set('is_error', isErr);
-    htmx.ajax('GET', '/ui/log-list?' + params.toString(), {
+    htmx.ajax('GET', './ui/log-list?' + params.toString(), {
       target: '#log-list',
       indicator: '#log-loading',
     });
@@ -240,7 +240,7 @@
   async function deleteLog(logId) {
     if (!confirm('このログ（ID: ' + logId + '）を削除しますか？')) return;
     const projectId = document.getElementById('log-project-select').value;
-    const url = '/api/logs/' + logId + (projectId ? '?project_id=' + encodeURIComponent(projectId) : '');
+    const url = './api/logs/' + logId + (projectId ? '?project_id=' + encodeURIComponent(projectId) : '');
     const resp = await fetch(url, { method: 'DELETE' });
     if (resp.ok) {
       document.getElementById('log-row-' + logId)?.remove();
@@ -254,7 +254,7 @@
     if (!checked.length) { alert('削除するログを選択してください'); return; }
     if (!confirm(checked.length + ' 件のログを削除しますか？')) return;
     const projectId = document.getElementById('log-project-select').value;
-    const resp = await fetch('/api/logs/bulk-delete', {
+    const resp = await fetch('./api/logs/bulk-delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ log_ids: checked, project_id: projectId ? parseInt(projectId) : null }),
