@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 
 from ..models import DeployedModel, InferenceLog, ReferenceLog
 from ..settings import settings
+from ..logging_utils import log_call
 
 
+@log_call
 def _compute_psi(expected: np.ndarray, actual: np.ndarray, bins: int = 10) -> float:
     """Population Stability Index を計算する。"""
     eps = 1e-6
@@ -30,6 +32,7 @@ def _compute_psi(expected: np.ndarray, actual: np.ndarray, bins: int = 10) -> fl
 
 # ── 予測値ドリフト ────────────────────────────────────────────────────────────
 
+@log_call
 def detect_drift(
     db: Session,
     project_id: int,
@@ -91,6 +94,7 @@ def detect_drift(
 
 # ── 特徴量ドリフト ────────────────────────────────────────────────────────────
 
+@log_call
 def detect_feature_drift(
     db: Session,
     project_id: int,
@@ -175,6 +179,7 @@ def detect_feature_drift(
 
 # ── Dataiku 実装 ─────────────────────────────────────────────────────────────
 
+@log_call
 def _dku_detect_drift(
     project_id: int,
     window_size: int,
@@ -226,6 +231,7 @@ def _dku_detect_drift(
     }
 
 
+@log_call
 def _dku_detect_feature_drift(
     project_id: int,
     window_size: int,
@@ -300,6 +306,7 @@ def _dku_detect_feature_drift(
 
 # ── 共通ロジック ─────────────────────────────────────────────────────────────
 
+@log_call
 def _compute_feature_drift_result(
     ref_features: list[dict],
     current_features: list[dict],
@@ -348,6 +355,7 @@ def _compute_feature_drift_result(
     }
 
 
+@log_call
 def _build_message(
     drift_detected: bool,
     psi_level: str,

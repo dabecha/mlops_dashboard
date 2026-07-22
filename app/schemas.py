@@ -99,6 +99,7 @@ class ProjectConfigResponse(ProjectConfigUpdate):
 
 class BulkDeleteLogsRequest(BaseModel):
     log_ids: list[int]
+    project_id: Optional[int] = None  # dataiku モードで対象データセット特定に使用
 
 
 class InferenceLogResponse(BaseModel):

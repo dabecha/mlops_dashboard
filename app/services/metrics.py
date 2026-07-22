@@ -8,14 +8,17 @@ from sqlalchemy.orm import Session
 
 from ..models import InferenceLog
 from ..settings import settings
+from ..logging_utils import log_call
 
 
+@log_call
 def _is_classification(task_type: str) -> bool:
     return task_type != "regression"
 
 
 # ── SQLite 実装 ──────────────────────────────────────────────────────────────
 
+@log_call
 def get_summary(db: Session, project_id: int, hours: int = 24) -> dict:
     if settings.is_dataiku:
         return _dku_get_summary(project_id, hours)
@@ -58,6 +61,7 @@ def get_summary(db: Session, project_id: int, hours: int = 24) -> dict:
     }
 
 
+@log_call
 def get_latency_distribution(db: Session, project_id: int, hours: int = 24) -> dict:
     if settings.is_dataiku:
         return _dku_get_latency_distribution(project_id, hours)
@@ -82,6 +86,7 @@ def get_latency_distribution(db: Session, project_id: int, hours: int = 24) -> d
     return {"labels": labels, "counts": counts.tolist()}
 
 
+@log_call
 def get_latest_accuracy(
     db: Session, project_id: int, hours: int = 168, task_type: str = "binary"
 ) -> dict:
@@ -119,6 +124,7 @@ def get_latest_accuracy(
         }
 
 
+@log_call
 def get_accuracy_over_time(
     db: Session, project_id: int, days: int = 7, task_type: str = "binary"
 ) -> dict:
@@ -161,6 +167,7 @@ def get_accuracy_over_time(
 
 # ── Dataiku 実装 ─────────────────────────────────────────────────────────────
 
+@log_call
 def _dku_get_summary(project_id: int, hours: int) -> dict:
     from ..dataiku_client import get_inference_logs_df
 
@@ -196,6 +203,7 @@ def _dku_get_summary(project_id: int, hours: int) -> dict:
     }
 
 
+@log_call
 def _dku_get_latency_distribution(project_id: int, hours: int) -> dict:
     from ..dataiku_client import get_inference_logs_df
 
@@ -212,6 +220,7 @@ def _dku_get_latency_distribution(project_id: int, hours: int) -> dict:
     return {"labels": labels, "counts": counts.tolist()}
 
 
+@log_call
 def _dku_get_latest_accuracy(project_id: int, hours: int, task_type: str) -> dict:
     from ..dataiku_client import get_inference_logs_df
 
@@ -239,6 +248,7 @@ def _dku_get_latest_accuracy(project_id: int, hours: int, task_type: str) -> dic
         }
 
 
+@log_call
 def _dku_get_accuracy_over_time(project_id: int, days: int, task_type: str) -> dict:
     from ..dataiku_client import get_inference_logs_df
 

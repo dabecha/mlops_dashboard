@@ -15,6 +15,7 @@ from ..services import config as config_svc
 from ..services import drift as drift_svc
 from ..services import metrics as metrics_svc
 from ..settings import settings
+from ..logging_utils import log_call
 
 _LOG_PAGE_SIZE = 50
 
@@ -25,6 +26,18 @@ _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "templates")
 templates = Jinja2Templates(directory=_TEMPLATE_DIR)
 
 
+@log_call
+def _parse_iso_dt(value: str | None) -> dt | None:
+    """ISO 形式の日時文字列を datetime に変換する。無効・空なら None を返す。"""
+    if not value:
+        return None
+    try:
+        return dt.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+@log_call
 def _get_projects(db: Session) -> list:
     """モードに応じてプロジェクト一覧を取得する。"""
     if settings.is_dataiku:
@@ -36,6 +49,7 @@ def _get_projects(db: Session) -> list:
     return projects
 
 
+@log_call
 def _get_project(db: Session, project_id: int):
     """モードに応じて単一プロジェクトを取得する。"""
     if settings.is_dataiku:
@@ -45,6 +59,7 @@ def _get_project(db: Session, project_id: int):
 
 
 @router.get("/", response_class=HTMLResponse)
+@log_call
 async def index(
     request: Request,
     project_id: int | None = Query(None),
@@ -58,12 +73,14 @@ async def index(
 
 
 @router.get("/summary", response_class=HTMLResponse)
+@log_call
 async def summary_page(request: Request, db: Session = Depends(get_db)):
     projects = _get_projects(db)
     return templates.TemplateResponse(request, "summary.html", {"projects": projects})
 
 
 @router.get("/ui/summary-panels", response_class=HTMLResponse)
+@log_call
 async def summary_panels(
     request: Request,
     hours: int = Query(24),
@@ -92,6 +109,7 @@ async def summary_panels(
 
 
 @router.get("/ui/panels", response_class=HTMLResponse)
+@log_call
 async def all_panels(
     request: Request,
     project_id: int = Query(...),
@@ -139,6 +157,7 @@ async def all_panels(
 
 
 @router.get("/manage", response_class=HTMLResponse)
+@log_call
 async def manage_page(request: Request, db: Session = Depends(get_db)):
     projects = _get_projects(db)
     return templates.TemplateResponse(
@@ -150,6 +169,7 @@ async def manage_page(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/ui/project-list", response_class=HTMLResponse)
+@log_call
 async def project_list(request: Request, db: Session = Depends(get_db)):
     projects = _get_projects(db)
     return templates.TemplateResponse(
@@ -158,6 +178,7 @@ async def project_list(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/ui/log-list", response_class=HTMLResponse)
+@log_call
 async def log_list(
     request: Request,
     project_id: int = Query(...),
@@ -168,31 +189,39 @@ async def log_list(
     page: int = Query(1),
     db: Session = Depends(get_db),
 ):
-    q = db.query(InferenceLog).filter(InferenceLog.project_id == project_id)
-    if from_dt:
-        try:
-            q = q.filter(InferenceLog.request_timestamp >= dt.fromisoformat(from_dt))
-        except ValueError:
-            pass
-    if to_dt:
-        try:
-            q = q.filter(InferenceLog.request_timestamp <= dt.fromisoformat(to_dt))
-        except ValueError:
-            pass
-    if request_id_filter:
-        q = q.filter(InferenceLog.request_id.contains(request_id_filter))
-    if is_error == "true":
-        q = q.filter(InferenceLog.is_error == True)  # noqa: E712
-    elif is_error == "false":
-        q = q.filter(InferenceLog.is_error == False)  # noqa: E712
+    parsed_from = _parse_iso_dt(from_dt)
+    parsed_to = _parse_iso_dt(to_dt)
+    error_filter = True if is_error == "true" else (False if is_error == "false" else None)
 
-    total = q.count()
-    logs = (
-        q.order_by(InferenceLog.request_timestamp.desc())
-        .offset((page - 1) * _LOG_PAGE_SIZE)
-        .limit(_LOG_PAGE_SIZE)
-        .all()
-    )
+    if settings.is_dataiku:
+        from ..dataiku_client import get_inference_logs_page
+        logs, total = get_inference_logs_page(
+            project_id,
+            from_dt=parsed_from,
+            to_dt=parsed_to,
+            request_id_filter=request_id_filter,
+            is_error=error_filter,
+            page=page,
+            page_size=_LOG_PAGE_SIZE,
+        )
+    else:
+        q = db.query(InferenceLog).filter(InferenceLog.project_id == project_id)
+        if parsed_from is not None:
+            q = q.filter(InferenceLog.request_timestamp >= parsed_from)
+        if parsed_to is not None:
+            q = q.filter(InferenceLog.request_timestamp <= parsed_to)
+        if request_id_filter:
+            q = q.filter(InferenceLog.request_id.contains(request_id_filter))
+        if error_filter is not None:
+            q = q.filter(InferenceLog.is_error == error_filter)
+
+        total = q.count()
+        logs = (
+            q.order_by(InferenceLog.request_timestamp.desc())
+            .offset((page - 1) * _LOG_PAGE_SIZE)
+            .limit(_LOG_PAGE_SIZE)
+            .all()
+        )
 
     return templates.TemplateResponse(
         request,
@@ -208,6 +237,7 @@ async def log_list(
 
 
 @router.get("/ui/config-modal/{project_id}", response_class=HTMLResponse)
+@log_call
 async def config_modal(
     request: Request,
     project_id: int,

@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from ..models import ProjectConfig
+from ..logging_utils import log_call
 
 # システムデフォルト値
 DEFAULTS: dict = {
@@ -17,6 +18,7 @@ DEFAULTS: dict = {
 }
 
 
+@log_call
 def get_config(db: Session, project_id: int) -> dict:
     """プロジェクト設定を dict で返す。未登録の場合はデフォルト値を返す。"""
     cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
