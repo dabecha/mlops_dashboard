@@ -69,7 +69,7 @@
   <!-- 精度推移 -->
   <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
     <h2 class="text-sm font-semibold text-gray-300 mb-4">
-      精度推移（{% if hours >= 24 and hours % 24 == 0 %}直近 {{ hours // 24 }} 日{% else %}直近 {{ hours }} 時間{% endif %}）
+      精度推移（{{ period_label(hours) }}）
       {% if accuracy.metric_name %}
       <span class="text-xs font-normal text-gray-500 ml-1">— {{ accuracy.metric_name }}</span>
       {% endif %}

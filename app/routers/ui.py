@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..exceptions import AppError, NotFoundError
-from ..formatting import format_duration
+from ..formatting import format_duration, period_label
 from ..metrics_catalog import is_higher_better, metrics_for_task
 from ..models import InferenceLog, Project
 from ..services import config as config_svc
@@ -30,6 +30,7 @@ templates = Jinja2Templates(directory=_TEMPLATE_DIR)
 templates.env.filters["duration"] = format_duration
 templates.env.globals["metrics_for_task"] = metrics_for_task
 templates.env.globals["metric_higher_better"] = is_higher_better
+templates.env.globals["period_label"] = period_label
 
 
 @log_call
