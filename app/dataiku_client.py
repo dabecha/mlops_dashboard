@@ -11,7 +11,7 @@ dev / production モードで Dataiku データセットから pandas DataFrame 
 
   各 Ops 対象プロジェクト (m_projects.project_id = Dataiku プロジェクトキー)
     - t_inference_logs  … 推論ログ
-    - m_deployed_models … デプロイ済みモデル
+    - t_deployed_models … デプロイ済みモデル
     - t_agent_tasks     … エージェントタスクログ
     - t_agent_steps     … エージェントステップログ
 
@@ -266,10 +266,10 @@ def delete_inference_logs(project_id: str, log_ids: list[str]) -> int:
 
 @log_call
 def get_deployed_models_df(project_id: str):
-    """対象プロジェクトの m_deployed_models を取得する。
+    """対象プロジェクトの t_deployed_models を取得する。
 
     project_id を Dataiku プロジェクトキーとして解決し、
-    そのプロジェクト内の m_deployed_models データセットを取得する。
+    そのプロジェクト内の t_deployed_models データセットを取得する。
     """
     import pandas as pd
     dku_project_key = _get_target_project_key(project_id)

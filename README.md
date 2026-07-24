@@ -37,7 +37,7 @@ SQLite ファイル。アプリ起動時に自動生成されます（`mlops.db`
 |---|---|---|
 | `m_projects` | マスタ | ML プロジェクト |
 | `project_configs` | 設定 | ML プロジェクト閾値設定 |
-| `m_deployed_models` | マスタ | デプロイ済みモデル |
+| `t_deployed_models` | マスタ | デプロイ済みモデル |
 | `t_inference_logs` | トランザクション | 推論リクエスト・結果ログ |
 | `t_reference_logs` | トランザクション | 学習データ・特徴量ドリフト参照データ |
 
@@ -77,7 +77,7 @@ ML プロジェクトごとの閾値設定。未設定の場合はデフォル�
 
 ---
 
-### `m_deployed_models` テーブル
+### `t_deployed_models` テーブル
 
 デプロイ済みモデルの記録。モデルバージョンや特徴量メタ情報を管理する。
 
@@ -101,7 +101,7 @@ ML プロジェクトごとの閾値設定。未設定の場合はデフォル�
 |---|---|---|---|---|
 | `log_id` | VARCHAR(100) | NO | auto | 主キー |
 | `project_id` | VARCHAR(100) | NO | — | `m_projects.project_id` への外部キー |
-| `model_id` | VARCHAR(100) | YES | NULL | `m_deployed_models.model_id` への外部キー |
+| `model_id` | VARCHAR(100) | YES | NULL | `t_deployed_models.model_id` への外部キー |
 | `feature_values` | TEXT | YES | NULL | 学習サンプルの特徴量 JSON（例: `{"age": 35.0, "amount": 5200.0}`） |
 | `actual_values` | REAL | YES | NULL | 学習時の正解ラベル |
 
@@ -118,7 +118,7 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
 | `batch_log_id` | VARCHAR(100) | YES | NULL | 推論バッチ単位の識別子 |
 | `request_timestamp` | DATETIME | NO | 現在時刻 | 推論実行日時（日本時間） |
 | `request_id` | VARCHAR(100) | YES | NULL | 呼び出し元が付与するリクエスト識別子 |
-| `model_id` | VARCHAR(100) | YES | NULL | `m_deployed_models.model_id` への外部キー |
+| `model_id` | VARCHAR(100) | YES | NULL | `t_deployed_models.model_id` への外部キー |
 | `prediction_values` | REAL | NO | — | モデルの予測値（分類: 確率 0–1、回帰: 数値） |
 | `actual_values` | REAL | YES | NULL | 正解ラベル（遅延ラベリングで後から投入可） |
 | `response_time_ms` | REAL | NO | — | 推論応答時間（ms） |
@@ -143,7 +143,7 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
     │
     │ 1:1            │ 1:N                     │ 1:N                    │ 1:N
     ▼                ▼                         ▼                        ▼
- project_configs   t_reference_logs       t_inference_logs         m_deployed_models
+ project_configs   t_reference_logs       t_inference_logs         t_deployed_models
  ────────────────  ──────────────────     ──────────────────────── ────────────────────────────
     id       INT PK  PK log_id  VARCHAR(100)  PK log_id  VARCHAR(100)  PK model_id    VARCHAR(100)
  FK project_id VARCHAR(100) UNIQ FK project_id VARCHAR(100) FK project_id VARCHAR(100) FK project_id VARCHAR(100)
@@ -203,7 +203,7 @@ Content-Type: application/json
 
 # 学習データの1サンプルを1リクエストで送信。複数回呼び出すことで参照分布を構築する。
 {
-  "model_id": "v1.2.0",                                   # 任意: m_deployed_models.model_id
+  "model_id": "v1.2.0",                                   # 任意: t_deployed_models.model_id
   "feature_values": {"age": 35.0, "amount": 5200.0},     # 任意: 学習サンプル特徴量
   "actual_values": 1.0                                    # 任意: 正解ラベル
 }
@@ -220,7 +220,7 @@ Content-Type: application/json
   "prediction_values": 0.82,                 # 必須: モデル出力値
   "response_time_ms": 130.5,                 # 必須: 応答時間 (ms)
   "request_id": "req-00001",                 # 任意
-  "model_id": "v1.2.0",                      # 任意: m_deployed_models.model_id
+  "model_id": "v1.2.0",                      # 任意: t_deployed_models.model_id
   "actual_values": 1.0,                      # 任意: 正解ラベル（遅延ラベリング対応）
   "is_error": false,                         # 任意: エラーフラグ
   "request_timestamp": "2026-05-08T12:00:00", # 任意: 省略時はサーバー時刻

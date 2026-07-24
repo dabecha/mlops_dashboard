@@ -54,7 +54,7 @@ class ProjectConfig(Base):
 
 
 class DeployedModel(Base):
-    __tablename__ = "m_deployed_models"
+    __tablename__ = "t_deployed_models"
 
     model_id = Column(String(100), primary_key=True, default=_gen_id, index=True)
     project_id = Column(String(100), ForeignKey("m_projects.project_id"), nullable=False, index=True)
@@ -75,7 +75,7 @@ class ReferenceLog(Base):
 
     log_id = Column(String(100), primary_key=True, default=_gen_id, index=True)
     project_id = Column(String(100), ForeignKey("m_projects.project_id"), nullable=False, index=True)
-    model_id = Column(String(100), ForeignKey("m_deployed_models.model_id"), nullable=True, index=True)
+    model_id = Column(String(100), ForeignKey("t_deployed_models.model_id"), nullable=True, index=True)
     feature_values = Column(Text, nullable=True)   # JSON: {"age": 35.0, "amount": 5200.0}
     actual_values = Column(Float, nullable=True)
 
@@ -91,7 +91,7 @@ class InferenceLog(Base):
     batch_log_id = Column(String(100), nullable=True, index=True)
     request_timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     request_id = Column(String(100), nullable=True)
-    model_id = Column(String(100), ForeignKey("m_deployed_models.model_id"), nullable=True, index=True)
+    model_id = Column(String(100), ForeignKey("t_deployed_models.model_id"), nullable=True, index=True)
     prediction_values = Column(Float, nullable=False)
     actual_values = Column(Float, nullable=True)
     response_time_ms = Column(Float, nullable=False)

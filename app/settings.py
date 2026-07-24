@@ -48,7 +48,7 @@ class Settings:
             "DKU_DATASET_INFERENCE_LOGS", "t_inference_logs"
         )
         self.dku_ds_deployed_models: str = os.environ.get(
-            "DKU_DATASET_DEPLOYED_MODELS", "m_deployed_models"
+            "DKU_DATASET_DEPLOYED_MODELS", "t_deployed_models"
         )
         self.dku_ds_reference_logs: str = os.environ.get(
             "DKU_DATASET_REFERENCE_LOGS", "t_reference_logs"
