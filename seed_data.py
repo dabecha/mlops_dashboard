@@ -12,7 +12,7 @@ import random
 from datetime import datetime, timedelta
 
 from app.database import Base, SessionLocal, engine
-from app.models import DeployedModel, InferenceLog, Project, ReferenceLog
+from app.models import DeployedModel, InferenceLog, Project, ProjectConfig, ReferenceLog
 
 random.seed(42)
 
@@ -122,6 +122,7 @@ def main() -> None:
         db.query(InferenceLog).delete()
         db.query(ReferenceLog).delete()
         db.query(DeployedModel).delete()
+        db.query(ProjectConfig).delete()
         db.query(Project).delete()
         db.commit()
 
@@ -130,6 +131,9 @@ def main() -> None:
                 "project_name": "fraud-detection",
                 "description": "クレジットカード不正検知モデル（二値分類）",
                 "task_type": "binary",
+                "metric_name": "ROC-AUC",       # 分類・大きいほど良い
+                "metric_warning": 0.80,
+                "metric_alert": 0.70,
                 "n": 600,
                 "days": 10,
                 "base_latency": 120.0,
@@ -151,6 +155,9 @@ def main() -> None:
                 "project_name": "price-prediction",
                 "description": "住宅価格予測モデル（回帰）",
                 "task_type": "regression",
+                "metric_name": "MAE",           # 回帰・小さいほど良い
+                "metric_warning": 8.0,
+                "metric_alert": 15.0,
                 "n": 400,
                 "days": 7,
                 "base_latency": 85.0,
@@ -172,6 +179,9 @@ def main() -> None:
                 "project_name": "churn-model",
                 "description": "顧客離脱予測モデル（二値分類）",
                 "task_type": "binary",
+                "metric_name": "logloss",       # 分類・小さいほど良い
+                "metric_warning": 0.40,
+                "metric_alert": 0.55,
                 "n": 300,
                 "days": 5,
                 "base_latency": 200.0,
@@ -203,10 +213,21 @@ def main() -> None:
             feature_dtypes = pdef.pop("feature_dtypes")
             feature_distributions = pdef.pop("feature_distributions")
             n_ref_samples = pdef.pop("n_ref_samples")
+            metric_name = pdef.pop("metric_name")
+            metric_warning = pdef.pop("metric_warning")
+            metric_alert = pdef.pop("metric_alert")
 
             project = Project(**pdef)
             db.add(project)
             db.flush()
+
+            # プロジェクト設定（閾値）を初期登録。ドリフト系はモデル既定値を使用
+            db.add(ProjectConfig(
+                project_id=project.project_id,
+                metric_name=metric_name,
+                metric_warning=metric_warning,
+                metric_alert=metric_alert,
+            ))
 
             # デプロイ済みモデルを 1 レコード登録
             deployed_model = DeployedModel(
