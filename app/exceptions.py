@@ -74,6 +74,23 @@ class MissingDatasetError(DataSourceError):
         )
 
 
+class MissingColumnError(DataIntegrityError):
+    """テーブル（データセット）のカラムが定義と異なる（必須カラムが不足）。"""
+
+    def __init__(self, missing: list[str], dataset_name: str, *, log_message: str | None = None):
+        self.missing = list(missing)
+        self.dataset_name = dataset_name
+        cols = "、".join(missing)
+        user_message = (
+            f"テーブル '{dataset_name}' のカラムが定義と異なります。"
+            f"不足しているカラム: {cols}。"
+        )
+        super().__init__(
+            user_message,
+            log_message=log_message or f"テーブル '{dataset_name}' の不足カラム: {self.missing}",
+        )
+
+
 class ConfigurationError(AppError):
     """サーバーの設定・実行環境に不備がある（500）。
 

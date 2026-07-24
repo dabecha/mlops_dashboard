@@ -29,9 +29,10 @@ from .exceptions import (
     ConfigurationError,
     DataIntegrityError,
     DataSourceError,
+    MissingColumnError,
     MissingDatasetError,
 )
-from .models import InferenceLog, Project
+from .models import DeployedModel, InferenceLog, Project, ReferenceLog
 from .settings import settings
 from .logging_utils import log_call
 
@@ -135,6 +136,7 @@ def _get_target_project_key(project_id: str) -> str | None:
     project_id を文字列キーとして返す（未登録なら None）。
     """
     df = _fetch_df(settings.dku_ds_projects)
+    _validate_columns(df, Project, settings.dku_ds_projects)
     row = df[df["project_id"].astype(str) == str(project_id)]
     if row.empty:
         return None
@@ -179,7 +181,7 @@ def get_projects() -> list[Project]:
     """
     logger.info("get_projects: dataset=%s project=%s", settings.dku_ds_projects, settings.dku_mgmt_project_key)
     df = _fetch_df(settings.dku_ds_projects)
-    _require_columns(df, ["project_id", "created_at"], settings.dku_ds_projects)
+    _validate_columns(df, Project, settings.dku_ds_projects)
     df["created_at"] = _to_naive_utc(df["created_at"])
     df = df.sort_values("created_at").reset_index(drop=True)
     projects = [_row_to_model(row, Project) for _, row in df.iterrows()]
@@ -202,6 +204,7 @@ def delete_project(project_id: str) -> bool:
     (t_inference_logs 等) は変更しない。削除できたら True を返す。
     """
     df = _fetch_df(settings.dku_ds_projects)
+    _validate_columns(df, Project, settings.dku_ds_projects)
     if df.empty or "project_id" not in df.columns:
         return False
 
@@ -230,10 +233,10 @@ def get_inference_logs_df(project_id: str, since: datetime | None = None):
         return pd.DataFrame()
 
     df = _fetch_df(settings.dku_ds_inference_logs, project_key=dku_project_key)
+    _validate_columns(df, InferenceLog, settings.dku_ds_inference_logs)
     if df.empty:
         return df
 
-    _require_columns(df, ["request_timestamp"], settings.dku_ds_inference_logs)
     if "project_id" in df.columns:
         df = df[df["project_id"].astype(str) == str(project_id)].copy()
 
@@ -297,6 +300,7 @@ def delete_inference_logs(project_id: str, log_ids: list[str]) -> int:
         return 0
 
     df = _fetch_df(settings.dku_ds_inference_logs, project_key=dku_project_key)
+    _validate_columns(df, InferenceLog, settings.dku_ds_inference_logs)
     if df.empty or "log_id" not in df.columns:
         return 0
 
@@ -325,6 +329,7 @@ def get_deployed_models_df(project_id: str):
         return pd.DataFrame()
 
     df = _fetch_df(settings.dku_ds_deployed_models, project_key=dku_project_key)
+    _validate_columns(df, DeployedModel, settings.dku_ds_deployed_models)
     if df.empty:
         return df
 
@@ -344,6 +349,7 @@ def get_reference_logs_df(project_id: str, model_id: str | None = None):
         return pd.DataFrame()
 
     df = _fetch_df(settings.dku_ds_reference_logs, project_key=dku_project_key)
+    _validate_columns(df, ReferenceLog, settings.dku_ds_reference_logs)
     if df.empty:
         return df
 
@@ -357,13 +363,20 @@ def get_reference_logs_df(project_id: str, model_id: str | None = None):
 
 # ── ユーティリティ ───────────────────────────────────────────────────────────
 
-def _require_columns(df, columns: list[str], dataset_name: str) -> None:
-    """DataFrame に必須カラムが揃っているか検証する（欠落時は DataIntegrityError）。"""
-    missing = [c for c in columns if c not in df.columns]
+def _validate_columns(df, model, dataset_name: str) -> None:
+    """DataFrame のカラムがモデル定義と一致するか検証する。
+
+    モデル (SQLAlchemy) に定義されたカラムのうち DataFrame に存在しないものが
+    あれば、不足カラム名を添えてエラーログを出力し MissingColumnError を送出する。
+    """
+    expected = {c.name for c in model.__table__.columns}
+    missing = sorted(expected - set(df.columns))
     if missing:
-        raise DataIntegrityError(
-            log_message=f"データセット {dataset_name} に必須カラムがありません: {missing}"
+        logger.error(
+            "テーブル %s のカラムが定義と異なります。不足カラム: %s",
+            dataset_name, missing,
         )
+        raise MissingColumnError(missing, dataset_name)
 
 
 @log_call
