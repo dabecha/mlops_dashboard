@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..exceptions import NotFoundError
+from ..exceptions import AppError, NotFoundError
 from ..models import InferenceLog, Project
 from ..services import config as config_svc
 from ..services import drift as drift_svc
@@ -90,17 +90,32 @@ async def summary_panels(
     projects = _get_projects(db)
     rows = []
     for p in projects:
-        cfg = config_svc.get_config(db, p.project_id)
-        summary = metrics_svc.get_summary(db, p.project_id, hours)
-        accuracy = metrics_svc.get_latest_accuracy(db, p.project_id, hours=168, task_type=p.task_type)
-        drift = drift_svc.detect_drift(
-            db, p.project_id,
-            window_size=cfg["drift_window_size"],
-            psi_warning=cfg["psi_warning"],
-            psi_alert=cfg["psi_alert"],
-            ks_alpha=cfg["ks_alpha"],
-        )
-        rows.append({"project": p, "summary": summary, "accuracy": accuracy, "drift": drift, "config": cfg})
+        # プロジェクト単位で例外を隔離し、不具合のあるプロジェクトだけを
+        # エラー表示、正常なプロジェクトは通常表示する。
+        try:
+            if settings.is_dataiku:
+                from ..dataiku_client import check_project_datasets
+                check_project_datasets(p.project_id)
+            cfg = config_svc.get_config(db, p.project_id)
+            summary = metrics_svc.get_summary(db, p.project_id, hours)
+            accuracy = metrics_svc.get_latest_accuracy(db, p.project_id, hours=168, task_type=p.task_type)
+            drift = drift_svc.detect_drift(
+                db, p.project_id,
+                window_size=cfg["drift_window_size"],
+                psi_warning=cfg["psi_warning"],
+                psi_alert=cfg["psi_alert"],
+                ks_alpha=cfg["ks_alpha"],
+            )
+            rows.append({
+                "project": p, "summary": summary, "accuracy": accuracy,
+                "drift": drift, "config": cfg, "error": None,
+            })
+        except AppError as exc:
+            logger.warning("サマリー: プロジェクト %s の取得に失敗: %s", p.project_id, exc.log_message)
+            rows.append({"project": p, "error": exc.user_message})
+        except Exception as exc:
+            logger.error("サマリー: プロジェクト %s で想定外エラー", p.project_id, exc_info=exc)
+            rows.append({"project": p, "error": "データ取得中にエラーが発生しました"})
 
     return templates.TemplateResponse(
         request,

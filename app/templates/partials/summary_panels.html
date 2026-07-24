@@ -3,10 +3,21 @@
 {% else %}
 
 <!-- ステータスバー（アラートのみ強調） -->
-{% set alert_count = rows | selectattr('drift.drift_detected') | list | length %}
-{% set error_projects = rows | selectattr('summary.error_rate', '>', 5) | list %}
-{% if alert_count > 0 or error_projects %}
+{% set ok_rows = rows | rejectattr('error') | list %}
+{% set problem_rows = rows | selectattr('error') | list %}
+{% set alert_count = ok_rows | selectattr('drift.drift_detected') | list | length %}
+{% set error_projects = ok_rows | selectattr('summary.error_rate', '>', 5) | list %}
+{% if alert_count > 0 or error_projects or problem_rows %}
 <div class="mb-6 flex flex-wrap gap-3">
+  {% if problem_rows %}
+  <div class="flex items-center gap-2 bg-red-950 border border-red-800 rounded-lg px-4 py-2 text-sm text-red-300">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+    </svg>
+    <span>{{ problem_rows | length }} プロジェクトで不具合を検出</span>
+  </div>
+  {% endif %}
   {% if alert_count > 0 %}
   <div class="flex items-center gap-2 bg-red-950 border border-red-800 rounded-lg px-4 py-2 text-sm text-red-300">
     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -44,6 +55,41 @@
     </thead>
     <tbody class="divide-y divide-gray-800">
       {% for row in rows %}
+      {% if row.error %}
+      {% set ep = row.project %}
+      <tr class="border-l-2 border-red-500 bg-red-950/20">
+        <td class="px-5 py-4">
+          <div class="font-semibold text-white">{{ ep.project_name }}</div>
+          {% if ep.description %}
+          <div class="text-xs text-gray-500 mt-0.5 truncate max-w-xs">{{ ep.description }}</div>
+          {% endif %}
+        </td>
+        <td class="px-4 py-4">
+          {% if ep.task_type == 'regression' %}
+          <span class="px-2 py-0.5 rounded text-xs font-medium bg-teal-900 text-teal-300">回帰</span>
+          {% elif ep.task_type == 'binary' %}
+          <span class="px-2 py-0.5 rounded text-xs font-medium bg-indigo-900 text-indigo-300">二値分類</span>
+          {% elif ep.task_type == 'multi-class' %}
+          <span class="px-2 py-0.5 rounded text-xs font-medium bg-violet-900 text-violet-300">多クラス</span>
+          {% else %}
+          <span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-900 text-purple-300">多ラベル</span>
+          {% endif %}
+        </td>
+        <td colspan="5" class="px-4 py-4">
+          <div class="flex items-start gap-2 text-sm text-red-300">
+            <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            </svg>
+            <span><span class="font-semibold">不具合あり:</span> {{ row.error }}</span>
+          </div>
+        </td>
+        <td class="px-4 py-4 text-center">
+          <a href="./?project_id={{ ep.project_id }}"
+            class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline transition-colors whitespace-nowrap">詳細 →</a>
+        </td>
+      </tr>
+      {% else %}
       {% set p = row.project %}
       {% set s = row.summary %}
       {% set a = row.accuracy %}
@@ -168,6 +214,7 @@
         </td>
 
       </tr>
+      {% endif %}
       {% endfor %}
     </tbody>
   </table>
