@@ -15,7 +15,7 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectResponse(BaseModel):
-    project_id: int
+    project_id: str
     project_name: str
     description: Optional[str]
     task_type: str
@@ -25,7 +25,7 @@ class ProjectResponse(BaseModel):
 
 
 class DeployedModelCreate(BaseModel):
-    project_id: int
+    project_id: str
     model_version: Optional[str] = None
     feature_dtypes: Optional[Dict[str, str]] = None
     feature_importance: Optional[Dict[str, float]] = None
@@ -33,8 +33,8 @@ class DeployedModelCreate(BaseModel):
 
 
 class DeployedModelResponse(BaseModel):
-    model_id: int
-    project_id: int
+    model_id: str
+    project_id: str
     model_version: Optional[str]
     feature_importance: Optional[Dict[str, float]]
     is_activate: bool
@@ -51,15 +51,15 @@ class DeployedModelResponse(BaseModel):
 
 
 class ReferenceLogCreate(BaseModel):
-    model_id: Optional[int] = None
+    model_id: Optional[str] = None
     feature_values: Optional[Dict[str, Any]] = None
     actual_values: Optional[float] = None
 
 
 class ReferenceLogResponse(BaseModel):
-    log_id: int
-    project_id: int
-    model_id: Optional[int]
+    log_id: str
+    project_id: str
+    model_id: Optional[str]
     actual_values: Optional[float]
 
     model_config = {"from_attributes": True}
@@ -69,7 +69,7 @@ class InferenceLogCreate(BaseModel):
     project_name: str
     batch_log_id: Optional[str] = None
     request_id: Optional[str] = None
-    model_id: Optional[int] = None
+    model_id: Optional[str] = None
     prediction_values: float
     actual_values: Optional[float] = None
     response_time_ms: float = Field(..., ge=0)
@@ -91,24 +91,24 @@ class ProjectConfigUpdate(BaseModel):
 
 
 class ProjectConfigResponse(ProjectConfigUpdate):
-    project_id: int
+    project_id: str
     updated_at: datetime
 
     model_config = {"from_attributes": True}
 
 
 class BulkDeleteLogsRequest(BaseModel):
-    log_ids: list[int]
-    project_id: Optional[int] = None  # dataiku モードで対象データセット特定に使用
+    log_ids: list[str]
+    project_id: Optional[str] = None  # dataiku モードで対象データセット特定に使用
 
 
 class InferenceLogResponse(BaseModel):
-    log_id: int
-    project_id: int
+    log_id: str
+    project_id: str
     batch_log_id: Optional[str]
     request_timestamp: datetime
     request_id: Optional[str]
-    model_id: Optional[int]
+    model_id: Optional[str]
     prediction_values: float
     actual_values: Optional[float]
     response_time_ms: float

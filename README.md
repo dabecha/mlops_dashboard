@@ -49,7 +49,7 @@ ML プロジェクトのマスターテーブル。
 
 | カラム | 型 | NULL | デフォルト | 説明 |
 |---|---|---|---|---|
-| `project_id` | INTEGER | NO | auto | 主キー |
+| `project_id` | VARCHAR(100) | NO | auto | 主キー |
 | `project_name` | VARCHAR(100) | NO | — | プロジェクト名（ユニーク）。Dataiku モードでは Dataiku プロジェクトキーとして使用 |
 | `description` | VARCHAR(500) | YES | NULL | 説明文 |
 | `task_type` | VARCHAR(20) | NO | `binary` | タスク種別: `binary` / `multi-class` / `multi-label` / `regression` |
@@ -64,7 +64,7 @@ ML プロジェクトごとの閾値設定。未設定の場合はデフォル�
 | カラム | 型 | NULL | デフォルト | 説明 |
 |---|---|---|---|---|
 | `id` | INTEGER | NO | auto | 主キー |
-| `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー（ユニーク） |
+| `project_id` | VARCHAR(100) | NO | — | `m_projects.project_id` への外部キー（ユニーク） |
 | `drift_window_size` | INTEGER | NO | `100` | ドリフト検知に使う直近サンプル数 |
 | `psi_warning` | REAL | NO | `0.10` | PSI 警告閾値 |
 | `psi_alert` | REAL | NO | `0.25` | PSI 異常閾値 |
@@ -83,8 +83,8 @@ ML プロジェクトごとの閾値設定。未設定の場合はデフォル�
 
 | カラム | 型 | NULL | デフォルト | 説明 |
 |---|---|---|---|---|
-| `model_id` | INTEGER | NO | auto | 主キー |
-| `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー |
+| `model_id` | VARCHAR(100) | NO | auto | 主キー |
+| `project_id` | VARCHAR(100) | NO | — | `m_projects.project_id` への外部キー |
 | `model_version` | VARCHAR(100) | YES | NULL | モデルバージョン識別子 |
 | `feature_dtypes` | TEXT | YES | NULL | 特徴量データ型 JSON（例: `{"age": "float32"}`） |
 | `feature_importance` | TEXT | YES | NULL | 特徴量重要度 JSON（例: `{"age": 0.43, "amount": 0.57}`） |
@@ -99,9 +99,9 @@ ML プロジェクトごとの閾値設定。未設定の場合はデフォル�
 
 | カラム | 型 | NULL | デフォルト | 説明 |
 |---|---|---|---|---|
-| `log_id` | INTEGER | NO | auto | 主キー |
-| `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー |
-| `model_id` | INTEGER | YES | NULL | `m_deployed_models.model_id` への外部キー |
+| `log_id` | VARCHAR(100) | NO | auto | 主キー |
+| `project_id` | VARCHAR(100) | NO | — | `m_projects.project_id` への外部キー |
+| `model_id` | VARCHAR(100) | YES | NULL | `m_deployed_models.model_id` への外部キー |
 | `feature_values` | TEXT | YES | NULL | 学習サンプルの特徴量 JSON（例: `{"age": 35.0, "amount": 5200.0}`） |
 | `actual_values` | REAL | YES | NULL | 学習時の正解ラベル |
 
@@ -113,12 +113,12 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
 
 | カラム | 型 | NULL | デフォルト | 説明 |
 |---|---|---|---|---|
-| `log_id` | INTEGER | NO | auto | 主キー |
-| `project_id` | INTEGER | NO | — | `m_projects.project_id` への外部キー |
+| `log_id` | VARCHAR(100) | NO | auto | 主キー |
+| `project_id` | VARCHAR(100) | NO | — | `m_projects.project_id` への外部キー |
 | `batch_log_id` | VARCHAR(100) | YES | NULL | 推論バッチ単位の識別子 |
 | `request_timestamp` | DATETIME | NO | 現在時刻 | 推論実行日時（日本時間） |
 | `request_id` | VARCHAR(100) | YES | NULL | 呼び出し元が付与するリクエスト識別子 |
-| `model_id` | INTEGER | YES | NULL | `m_deployed_models.model_id` への外部キー |
+| `model_id` | VARCHAR(100) | YES | NULL | `m_deployed_models.model_id` への外部キー |
 | `prediction_values` | REAL | NO | — | モデルの予測値（分類: 確率 0–1、回帰: 数値） |
 | `actual_values` | REAL | YES | NULL | 正解ラベル（遅延ラベリングで後から投入可） |
 | `response_time_ms` | REAL | NO | — | 推論応答時間（ms） |
@@ -135,7 +135,7 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
 ```
  m_projects
  ─────────────────────────────
- PK project_id    INTEGER
+ PK project_id    VARCHAR(100)
     project_name  VARCHAR(100)  UNIQUE
     description   VARCHAR(500)
     task_type     VARCHAR(20)   -- binary | multi-class | multi-label | regression
@@ -145,12 +145,12 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
     ▼                ▼                         ▼                        ▼
  project_configs   t_reference_logs       t_inference_logs         m_deployed_models
  ────────────────  ──────────────────     ──────────────────────── ────────────────────────────
-    id       INT PK PK log_id  INTEGER    PK log_id     INTEGER    PK model_id        INTEGER
- FK project_id   UNIQ FK project_id INT  FK project_id INTEGER    FK project_id      INTEGER
-    drift_window_size FK model_id  INT →    batch_log_id               model_version      VARCHAR(100)
+    id       INT PK  PK log_id  VARCHAR(100)  PK log_id  VARCHAR(100)  PK model_id    VARCHAR(100)
+ FK project_id VARCHAR(100) UNIQ FK project_id VARCHAR(100) FK project_id VARCHAR(100) FK project_id VARCHAR(100)
+    drift_window_size FK model_id VARCHAR(100) → batch_log_id               model_version      VARCHAR(100)
     psi_warning       feature_values TEXT   request_timestamp          feature_dtypes     TEXT  -- JSON
     psi_alert         actual_values  REAL   request_id                 feature_importance TEXT  -- JSON
-    ks_alpha                            FK model_id   INTEGER →        is_activate        BOOLEAN
+    ks_alpha                            FK model_id VARCHAR(100) →      is_activate        BOOLEAN
     accuracy_warning/alert              prediction_values              created_at         DATETIME
     mae_warning/alert                   actual_values
     updated_at                          response_time_ms
@@ -187,7 +187,7 @@ POST /api/projects/{project_id}/models
 Content-Type: application/json
 
 {
-  "project_id": 1,
+  "project_id": "fraud-detection",
   "model_version": "v1.2.0",
   "feature_dtypes": {"age": "float32", "amount": "float32"},  # 任意
   "feature_importance": {"age": 0.43, "amount": 0.57},        # 任意: 特徴量重要度
@@ -203,7 +203,7 @@ Content-Type: application/json
 
 # 学習データの1サンプルを1リクエストで送信。複数回呼び出すことで参照分布を構築する。
 {
-  "model_id": 1,                                          # 任意: m_deployed_models.model_id
+  "model_id": "v1.2.0",                                   # 任意: m_deployed_models.model_id
   "feature_values": {"age": 35.0, "amount": 5200.0},     # 任意: 学習サンプル特徴量
   "actual_values": 1.0                                    # 任意: 正解ラベル
 }
@@ -220,7 +220,7 @@ Content-Type: application/json
   "prediction_values": 0.82,                 # 必須: モデル出力値
   "response_time_ms": 130.5,                 # 必須: 応答時間 (ms)
   "request_id": "req-00001",                 # 任意
-  "model_id": 1,                             # 任意: m_deployed_models.model_id
+  "model_id": "v1.2.0",                      # 任意: m_deployed_models.model_id
   "actual_values": 1.0,                      # 任意: 正解ラベル（遅延ラベリング対応）
   "is_error": false,                         # 任意: エラーフラグ
   "request_timestamp": "2026-05-08T12:00:00", # 任意: 省略時はサーバー時刻

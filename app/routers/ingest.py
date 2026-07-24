@@ -48,7 +48,7 @@ def list_projects(db: Session = Depends(get_db)):
 
 @router.delete("/projects/{project_id}", status_code=204)
 @log_call
-def delete_project(project_id: int, db: Session = Depends(get_db)):
+def delete_project(project_id: str, db: Session = Depends(get_db)):
     if settings.is_dataiku:
         from ..dataiku_client import delete_project as dku_delete_project
         if not dku_delete_project(project_id):
@@ -64,7 +64,7 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
 @router.post("/projects/{project_id}/models", response_model=DeployedModelResponse, status_code=201)
 @log_call
 def register_deployed_model(
-    project_id: int,
+    project_id: str,
     body: DeployedModelCreate,
     db: Session = Depends(get_db),
 ):
@@ -86,7 +86,7 @@ def register_deployed_model(
 @router.post("/projects/{project_id}/reference-logs", response_model=ReferenceLogResponse, status_code=201)
 @log_call
 def register_reference_log(
-    project_id: int,
+    project_id: str,
     body: ReferenceLogCreate,
     db: Session = Depends(get_db),
 ):
@@ -105,7 +105,7 @@ def register_reference_log(
 
 
 @log_call
-def _check_project_exists(db: Session, project_id: int) -> bool:
+def _check_project_exists(db: Session, project_id: str) -> bool:
     """モードに応じてプロジェクト存在確認を行う。"""
     if settings.is_dataiku:
         from ..dataiku_client import get_project_by_id
@@ -115,7 +115,7 @@ def _check_project_exists(db: Session, project_id: int) -> bool:
 
 @router.get("/projects/{project_id}/config", response_model=ProjectConfigResponse)
 @log_call
-def get_config(project_id: int, db: Session = Depends(get_db)):
+def get_config(project_id: str, db: Session = Depends(get_db)):
     if not _check_project_exists(db, project_id):
         raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
     cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
@@ -126,7 +126,7 @@ def get_config(project_id: int, db: Session = Depends(get_db)):
 
 @router.put("/projects/{project_id}/config", response_model=ProjectConfigResponse)
 @log_call
-def upsert_config(project_id: int, body: ProjectConfigUpdate, db: Session = Depends(get_db)):
+def upsert_config(project_id: str, body: ProjectConfigUpdate, db: Session = Depends(get_db)):
     if not _check_project_exists(db, project_id):
         raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
     cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
@@ -145,8 +145,8 @@ def upsert_config(project_id: int, body: ProjectConfigUpdate, db: Session = Depe
 @router.delete("/logs/{log_id}", status_code=204)
 @log_call
 def delete_log(
-    log_id: int,
-    project_id: int | None = Query(None),
+    log_id: str,
+    project_id: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
     if settings.is_dataiku:

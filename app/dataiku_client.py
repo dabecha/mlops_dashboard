@@ -23,6 +23,8 @@ import json
 import logging
 from datetime import datetime
 
+from sqlalchemy import String
+
 from .models import InferenceLog, Project
 from .settings import settings
 from .logging_utils import log_call
@@ -97,7 +99,7 @@ def _to_naive_utc(series):
 # ── プロジェクト解決 ─────────────────────────────────────────────────────────
 
 @log_call
-def _get_target_project_key(project_id: int) -> str | None:
+def _get_target_project_key(project_id: str) -> str | None:
     """project_id に対応する Dataiku プロジェクトキーを返す。
 
     Dataiku プロジェクトキーは project_id と一致する。
@@ -105,7 +107,7 @@ def _get_target_project_key(project_id: int) -> str | None:
     project_id を文字列キーとして返す（未登録なら None）。
     """
     df = _fetch_df(settings.dku_ds_projects)
-    row = df[df["project_id"] == project_id]
+    row = df[df["project_id"].astype(str) == str(project_id)]
     if row.empty:
         return None
     return str(project_id)
@@ -134,14 +136,14 @@ def get_projects() -> list[Project]:
 
 
 @log_call
-def get_project_by_id(project_id: int) -> Project | None:
+def get_project_by_id(project_id: str) -> Project | None:
     """project_id でプロジェクトを 1 件取得する。"""
     projects = get_projects()
-    return next((p for p in projects if int(p.project_id) == project_id), None)
+    return next((p for p in projects if str(p.project_id) == str(project_id)), None)
 
 
 @log_call
-def delete_project(project_id: int) -> bool:
+def delete_project(project_id: str) -> bool:
     """管理プロジェクトの m_projects から指定プロジェクトを削除する。
 
     m_projects の行のみを削除し、各 Ops プロジェクトの子データ
@@ -151,7 +153,7 @@ def delete_project(project_id: int) -> bool:
     if df.empty or "project_id" not in df.columns:
         return False
 
-    mask = df["project_id"] == project_id
+    mask = df["project_id"].astype(str) == str(project_id)
     if not bool(mask.any()):
         return False
 
@@ -164,7 +166,7 @@ def delete_project(project_id: int) -> bool:
 # ── ML 推論ログ（各 Ops 対象プロジェクトから取得） ───────────────────────────
 
 @log_call
-def get_inference_logs_df(project_id: int, since: datetime | None = None):
+def get_inference_logs_df(project_id: str, since: datetime | None = None):
     """対象プロジェクトの t_inference_logs を取得する。
 
     project_id を Dataiku プロジェクトキーとして解決し、
@@ -180,7 +182,7 @@ def get_inference_logs_df(project_id: int, since: datetime | None = None):
         return df
 
     if "project_id" in df.columns:
-        df = df[df["project_id"] == project_id].copy()
+        df = df[df["project_id"].astype(str) == str(project_id)].copy()
 
     df["request_timestamp"] = _to_naive_utc(df["request_timestamp"])
     if since is not None:
@@ -192,7 +194,7 @@ def get_inference_logs_df(project_id: int, since: datetime | None = None):
 
 @log_call
 def get_inference_logs_page(
-    project_id: int,
+    project_id: str,
     from_dt: datetime | None = None,
     to_dt: datetime | None = None,
     request_id_filter: str | None = None,
@@ -227,7 +229,7 @@ def get_inference_logs_page(
 
 
 @log_call
-def delete_inference_logs(project_id: int, log_ids: list[int]) -> int:
+def delete_inference_logs(project_id: str, log_ids: list[str]) -> int:
     """対象プロジェクトの t_inference_logs から指定ログを削除する。
 
     データセットを読み込み、log_id が log_ids に含まれる行を除外して
@@ -243,8 +245,8 @@ def delete_inference_logs(project_id: int, log_ids: list[int]) -> int:
     if df.empty or "log_id" not in df.columns:
         return 0
 
-    id_set = {int(i) for i in log_ids}
-    mask = df["log_id"].isin(id_set)
+    id_set = {str(i) for i in log_ids}
+    mask = df["log_id"].astype(str).isin(id_set)
     deleted = int(mask.sum())
     if deleted == 0:
         return 0
@@ -256,7 +258,7 @@ def delete_inference_logs(project_id: int, log_ids: list[int]) -> int:
 
 
 @log_call
-def get_deployed_models_df(project_id: int):
+def get_deployed_models_df(project_id: str):
     """対象プロジェクトの m_deployed_models を取得する。
 
     project_id を Dataiku プロジェクトキーとして解決し、
@@ -272,14 +274,14 @@ def get_deployed_models_df(project_id: int):
         return df
 
     if "project_id" in df.columns:
-        df = df[df["project_id"] == project_id].copy()
+        df = df[df["project_id"].astype(str) == str(project_id)].copy()
 
     df["created_at"] = _to_naive_utc(df["created_at"])
     return df.reset_index(drop=True)
 
 
 @log_call
-def get_reference_logs_df(project_id: int, model_id: int | None = None):
+def get_reference_logs_df(project_id: str, model_id: str | None = None):
     """対象プロジェクトの t_reference_logs を取得する。"""
     import pandas as pd
     dku_project_key = _get_target_project_key(project_id)
@@ -291,9 +293,9 @@ def get_reference_logs_df(project_id: int, model_id: int | None = None):
         return df
 
     if "project_id" in df.columns:
-        df = df[df["project_id"] == project_id].copy()
+        df = df[df["project_id"].astype(str) == str(project_id)].copy()
     if model_id is not None and "model_id" in df.columns:
-        df = df[df["model_id"] == model_id].copy()
+        df = df[df["model_id"].astype(str) == str(model_id)].copy()
 
     return df.reset_index(drop=True)
 
@@ -325,8 +327,16 @@ def _row_to_model(row, model):
     余分な列は無視する。DB セッションには紐付かない一時オブジェクトを返す。
     """
     data = _row_to_dict(row)
-    columns = {c.name for c in model.__table__.columns}
-    return model(**{k: v for k, v in data.items() if k in columns})
+    columns = {c.name: c.type for c in model.__table__.columns}
+    kwargs = {}
+    for k, v in data.items():
+        if k not in columns:
+            continue
+        # String 型カラム（ID 等）は文字列に統一する
+        if v is not None and isinstance(columns[k], String):
+            v = str(v)
+        kwargs[k] = v
+    return model(**kwargs)
 
 
 @log_call

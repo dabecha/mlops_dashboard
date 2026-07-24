@@ -24,8 +24,8 @@ except ImportError:
 
 
 def make_reference_log_samples(
-    project_id: int,
-    model_id: int,
+    project_id: str,
+    model_id: str,
     feature_names: list[str],
     n_samples: int,
     feature_distributions: dict[str, tuple],
@@ -51,8 +51,8 @@ def make_reference_log_samples(
 
 
 def make_logs(
-    project_id: int,
-    model_id: int | None,
+    project_id: str,
+    model_id: str | None,
     n: int,
     days: int,
     base_latency: float,

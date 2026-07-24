@@ -35,7 +35,7 @@ def _compute_psi(expected: np.ndarray, actual: np.ndarray, bins: int = 10) -> fl
 @log_call
 def detect_drift(
     db: Session,
-    project_id: int,
+    project_id: str,
     window_size: int = 100,
     psi_warning: float = 0.10,
     psi_alert: float = 0.25,
@@ -97,7 +97,7 @@ def detect_drift(
 @log_call
 def detect_feature_drift(
     db: Session,
-    project_id: int,
+    project_id: str,
     window_size: int = 100,
     psi_warning: float = 0.10,
     psi_alert: float = 0.25,
@@ -181,7 +181,7 @@ def detect_feature_drift(
 
 @log_call
 def _dku_detect_drift(
-    project_id: int,
+    project_id: str,
     window_size: int,
     psi_warning: float,
     psi_alert: float,
@@ -233,7 +233,7 @@ def _dku_detect_drift(
 
 @log_call
 def _dku_detect_feature_drift(
-    project_id: int,
+    project_id: str,
     window_size: int,
     psi_warning: float,
     psi_alert: float,

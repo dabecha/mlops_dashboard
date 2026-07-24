@@ -50,7 +50,7 @@ def _get_projects(db: Session) -> list:
 
 
 @log_call
-def _get_project(db: Session, project_id: int):
+def _get_project(db: Session, project_id: str):
     """モードに応じて単一プロジェクトを取得する。"""
     if settings.is_dataiku:
         from ..dataiku_client import get_project_by_id
@@ -62,7 +62,7 @@ def _get_project(db: Session, project_id: int):
 @log_call
 async def index(
     request: Request,
-    project_id: int | None = Query(None),
+    project_id: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
     projects = _get_projects(db)
@@ -112,7 +112,7 @@ async def summary_panels(
 @log_call
 async def all_panels(
     request: Request,
-    project_id: int = Query(...),
+    project_id: str = Query(...),
     hours: int = Query(24),
     days: int = Query(7),
     db: Session = Depends(get_db),
@@ -181,7 +181,7 @@ async def project_list(request: Request, db: Session = Depends(get_db)):
 @log_call
 async def log_list(
     request: Request,
-    project_id: int = Query(...),
+    project_id: str = Query(...),
     from_dt: str | None = Query(None),
     to_dt: str | None = Query(None),
     request_id_filter: str | None = Query(None),
@@ -240,7 +240,7 @@ async def log_list(
 @log_call
 async def config_modal(
     request: Request,
-    project_id: int,
+    project_id: str,
     db: Session = Depends(get_db),
 ):
     project = _get_project(db, project_id)

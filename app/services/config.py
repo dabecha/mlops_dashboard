@@ -19,7 +19,7 @@ DEFAULTS: dict = {
 
 
 @log_call
-def get_config(db: Session, project_id: int) -> dict:
+def get_config(db: Session, project_id: str) -> dict:
     """プロジェクト設定を dict で返す。未登録の場合はデフォルト値を返す。"""
     cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
     if cfg:
