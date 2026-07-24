@@ -84,10 +84,9 @@ class ProjectConfigUpdate(BaseModel):
     psi_warning: float = Field(0.10, ge=0.0, le=1.0)
     psi_alert: float = Field(0.25, ge=0.0, le=2.0)
     ks_alpha: float = Field(0.05, ge=0.0, le=1.0)
-    accuracy_warning: float = Field(75.0, ge=0.0, le=100.0)
-    accuracy_alert: float = Field(60.0, ge=0.0, le=100.0)
-    mae_warning: Optional[float] = None
-    mae_alert: Optional[float] = None
+    metric_name: str = Field("Accuracy", min_length=1, max_length=50)
+    metric_warning: float = Field(75.0)
+    metric_alert: float = Field(60.0)
 
 
 class ProjectConfigResponse(ProjectConfigUpdate):

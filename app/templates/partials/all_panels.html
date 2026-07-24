@@ -70,8 +70,8 @@
   <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
     <h2 class="text-sm font-semibold text-gray-300 mb-4">
       精度推移（直近 {{ days }} 日）
-      {% if accuracy.metric_name %}
-      <span class="text-xs font-normal text-gray-500 ml-1">— {{ accuracy.metric_name }}</span>
+      {% if config.metric_name %}
+      <span class="text-xs font-normal text-gray-500 ml-1">— {{ config.metric_name }}</span>
       {% endif %}
     </h2>
     {% if accuracy.labels %}
@@ -79,9 +79,9 @@
       <canvas id="accuracy-chart"
         data-labels='{{ accuracy.labels | tojson }}'
         data-values='{{ accuracy.data | tojson }}'
-        data-metric-name="{{ accuracy.metric_name }}"
-        data-threshold-warning="{{ config.accuracy_warning if project.task_type != 'regression' else (config.mae_warning or '') }}"
-        data-threshold-alert="{{ config.accuracy_alert if project.task_type != 'regression' else (config.mae_alert or '') }}"
+        data-metric-name="{{ config.metric_name }}"
+        data-threshold-warning="{{ config.metric_warning }}"
+        data-threshold-alert="{{ config.metric_alert }}"
         data-task-type="{{ project.task_type }}">
       </canvas>
     </div>

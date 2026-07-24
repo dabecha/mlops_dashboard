@@ -82,77 +82,52 @@
       </p>
     </section>
 
-    <!-- 精度アラート -->
+    <!-- 評価指標アラート -->
     <section>
       <h4 class="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-2">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
-        精度アラート
+        評価指標アラート
       </h4>
 
-      {% if project.task_type != 'regression' %}
+      <div class="mb-4">
+        <label class="block text-xs text-gray-400 mb-1">評価指標名
+          <span class="text-gray-600 ml-1" title="プロジェクトで用いる評価指標の名称">?</span>
+        </label>
+        <input type="text" name="metric_name" maxlength="50"
+          value="{{ config.metric_name }}"
+          placeholder="例: ROC-AUC, logloss, MAE, RMSE"
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" required>
+      </div>
+
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-xs text-gray-400 mb-1">
-            Accuracy 警告閾値（%）
+            警告閾値
             <span class="px-1 py-0.5 rounded text-xs bg-yellow-900/50 text-yellow-400 ml-1">警告</span>
           </label>
-          <input type="number" name="accuracy_warning" min="0" max="100" step="0.1"
-            value="{{ config.accuracy_warning }}"
+          <input type="number" name="metric_warning" step="0.001"
+            value="{{ config.metric_warning }}"
             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" required>
         </div>
         <div>
           <label class="block text-xs text-gray-400 mb-1">
-            Accuracy アラート閾値（%）
+            異常閾値
             <span class="px-1 py-0.5 rounded text-xs bg-red-900/50 text-red-400 ml-1">異常</span>
           </label>
-          <input type="number" name="accuracy_alert" min="0" max="100" step="0.1"
-            value="{{ config.accuracy_alert }}"
+          <input type="number" name="metric_alert" step="0.001"
+            value="{{ config.metric_alert }}"
             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" required>
         </div>
       </div>
       <p class="text-xs text-gray-600 mt-2">
-        Accuracy ≥ 警告閾値 → 正常（緑）　/　アラート閾値 ≤ Accuracy &lt; 警告閾値 → 警告（黄）　/　&lt; アラート閾値 → 異常（赤）
+        {% if project.task_type == 'regression' %}
+        値が小さいほど良い指標: 値 &lt; 警告閾値 → 正常（緑）　/　&lt; 異常閾値 → 警告（黄）　/　それ以外 → 異常（赤）
+        {% else %}
+        値が大きいほど良い指標: 値 ≥ 警告閾値 → 正常（緑）　/　≥ 異常閾値 → 警告（黄）　/　それ以外 → 異常（赤）
+        {% endif %}
       </p>
-
-      {# 回帰用は hidden で送信（値は無視） #}
-      <input type="hidden" name="mae_warning" value="">
-      <input type="hidden" name="mae_alert" value="">
-
-      {% else %}
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-xs text-gray-400 mb-1">
-            MAE 警告閾値
-            <span class="px-1 py-0.5 rounded text-xs bg-yellow-900/50 text-yellow-400 ml-1">警告</span>
-            <span class="text-gray-600">（空欄で無効）</span>
-          </label>
-          <input type="number" name="mae_warning" min="0" step="0.001"
-            value="{{ config.mae_warning if config.mae_warning is not none else '' }}"
-            placeholder="例: 10.0"
-            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
-        </div>
-        <div>
-          <label class="block text-xs text-gray-400 mb-1">
-            MAE アラート閾値
-            <span class="px-1 py-0.5 rounded text-xs bg-red-900/50 text-red-400 ml-1">異常</span>
-            <span class="text-gray-600">（空欄で無効）</span>
-          </label>
-          <input type="number" name="mae_alert" min="0" step="0.001"
-            value="{{ config.mae_alert if config.mae_alert is not none else '' }}"
-            placeholder="例: 20.0"
-            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
-        </div>
-      </div>
-      <p class="text-xs text-gray-600 mt-2">
-        MAE &lt; 警告閾値 → 正常（緑）　/　警告閾値 ≤ MAE &lt; アラート閾値 → 警告（黄）　/　≥ アラート閾値 → 異常（赤）
-      </p>
-
-      {# 分類用は hidden で送信（デフォルト値） #}
-      <input type="hidden" name="accuracy_warning" value="75.0">
-      <input type="hidden" name="accuracy_alert" value="60.0">
-      {% endif %}
     </section>
 
   </div>

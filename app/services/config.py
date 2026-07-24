@@ -11,10 +11,9 @@ DEFAULTS: dict = {
     "psi_warning": 0.10,
     "psi_alert": 0.25,
     "ks_alpha": 0.05,
-    "accuracy_warning": 75.0,
-    "accuracy_alert": 60.0,
-    "mae_warning": None,
-    "mae_alert": None,
+    "metric_name": "Accuracy",
+    "metric_warning": 75.0,
+    "metric_alert": 60.0,
 }
 
 

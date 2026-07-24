@@ -69,10 +69,9 @@ ML プロジェクトごとの閾値設定。未設定の場合はデフォル�
 | `psi_warning` | REAL | NO | `0.10` | PSI 警告閾値 |
 | `psi_alert` | REAL | NO | `0.25` | PSI 異常閾値 |
 | `ks_alpha` | REAL | NO | `0.05` | KS 検定の有意水準 |
-| `accuracy_warning` | REAL | NO | `75.0` | 精度警告閾値（%） |
-| `accuracy_alert` | REAL | NO | `60.0` | 精度異常閾値（%） |
-| `mae_warning` | REAL | YES | NULL | MAE 警告閾値（回帰用） |
-| `mae_alert` | REAL | YES | NULL | MAE 異常閾値（回帰用） |
+| `metric_name` | VARCHAR(50) | NO | `Accuracy` | 評価指標名（プロジェクト側で設定: ROC-AUC / logloss / MAE / RMSE 等） |
+| `metric_warning` | REAL | NO | `75.0` | 評価指標の警告閾値（回帰・分類共通） |
+| `metric_alert` | REAL | NO | `60.0` | 評価指標の異常閾値（回帰・分類共通） |
 | `updated_at` | DATETIME | NO | 現在時刻 | 最終更新日時（日本時間） |
 
 ---
@@ -151,8 +150,8 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
     psi_warning       feature_values TEXT   request_timestamp          feature_dtypes     TEXT  -- JSON
     psi_alert         actual_values  REAL   request_id                 feature_importance TEXT  -- JSON
     ks_alpha                            FK model_id VARCHAR(100) →      is_activate        BOOLEAN
-    accuracy_warning/alert              prediction_values              created_at         DATETIME
-    mae_warning/alert                   actual_values
+    metric_name                         prediction_values              created_at         DATETIME
+    metric_warning/alert                actual_values
     updated_at                          response_time_ms
                                         is_error
                                         feature_values

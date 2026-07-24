@@ -99,10 +99,9 @@
         psi_warning:       parseFloat(data.psi_warning),
         psi_alert:         parseFloat(data.psi_alert),
         ks_alpha:          parseFloat(data.ks_alpha),
-        accuracy_warning:  parseFloat(data.accuracy_warning),
-        accuracy_alert:    parseFloat(data.accuracy_alert),
-        mae_warning:       data.mae_warning !== '' ? parseFloat(data.mae_warning) : null,
-        mae_alert:         data.mae_alert   !== '' ? parseFloat(data.mae_alert)   : null,
+        metric_name:       data.metric_name,
+        metric_warning:    parseFloat(data.metric_warning),
+        metric_alert:      parseFloat(data.metric_alert),
       };
 
       const msgEl = document.getElementById('config-save-msg');

@@ -154,14 +154,14 @@
         <td class="px-4 py-4 text-right">
           {% if a.value is not none %}
           {% if p.task_type != 'regression' %}
-            {% set acc_color = 'text-emerald-400' if a.value >= row.config.accuracy_warning else ('text-yellow-400' if a.value >= row.config.accuracy_alert else 'text-red-400') %}
+            {% set acc_color = 'text-emerald-400' if a.value >= row.config.metric_warning else ('text-yellow-400' if a.value >= row.config.metric_alert else 'text-red-400') %}
           {% else %}
-            {% set acc_color = 'text-teal-300' if row.config.mae_warning is none else ('text-emerald-400' if a.value < row.config.mae_warning else ('text-yellow-400' if row.config.mae_alert is none or a.value < row.config.mae_alert else 'text-red-400')) %}
+            {% set acc_color = 'text-emerald-400' if a.value < row.config.metric_warning else ('text-yellow-400' if a.value < row.config.metric_alert else 'text-red-400') %}
           {% endif %}
           <span class="font-mono {{ acc_color }}">
             {% if p.task_type != 'regression' %}{{ a.value }}%{% else %}{{ a.value }}{% endif %}
           </span>
-          <div class="text-xs text-gray-600">{{ a.metric_name }} / n={{ a.sample_count }}</div>
+          <div class="text-xs text-gray-600">{{ row.config.metric_name }} / n={{ a.sample_count }}</div>
           {% else %}
           <span class="text-gray-600 text-xs">ラベルなし</span>
           {% endif %}
