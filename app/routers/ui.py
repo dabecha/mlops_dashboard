@@ -105,9 +105,9 @@ async def summary_panels(
             cfg = config_svc.get_config(db, p.project_id)
             summary = metrics_svc.get_summary(db, p.project_id, hours)
             accuracy = metrics_svc.get_latest_accuracy(
-            db, p.project_id, hours=168, task_type=p.task_type,
-            metric_name=cfg["metric_name"], threshold=cfg["classification_threshold"],
-        )
+                db, p.project_id, hours=hours, task_type=p.task_type,
+                metric_name=cfg["metric_name"], threshold=cfg["classification_threshold"],
+            )
             drift = drift_svc.detect_drift(
                 db, p.project_id,
                 window_size=cfg["drift_window_size"],
@@ -139,7 +139,6 @@ async def all_panels(
     request: Request,
     project_id: str = Query(...),
     hours: int = Query(24),
-    days: int = Query(7),
     db: Session = Depends(get_db),
 ):
     project = _get_project(db, project_id)
@@ -154,7 +153,7 @@ async def all_panels(
     summary = metrics_svc.get_summary(db, project_id, hours)
     latency = metrics_svc.get_latency_distribution(db, project_id, hours)
     accuracy = metrics_svc.get_accuracy_over_time(
-        db, project_id, days, project.task_type,
+        db, project_id, hours, project.task_type,
         metric_name=cfg["metric_name"], threshold=cfg["classification_threshold"],
     )
     drift = drift_svc.detect_drift(
@@ -183,7 +182,6 @@ async def all_panels(
             "feature_drift": feature_drift,
             "config": cfg,
             "hours": hours,
-            "days": days,
         },
     )
 

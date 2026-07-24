@@ -48,7 +48,7 @@
         <th class="text-right px-4 py-3 font-medium">リクエスト数</th>
         <th class="text-right px-4 py-3 font-medium">エラー率</th>
         <th class="text-right px-4 py-3 font-medium">応答時間<br><span class="text-gray-600 normal-case">Avg / P95</span></th>
-        <th class="text-right px-4 py-3 font-medium">精度<br><span class="text-gray-600 normal-case">直近7日</span></th>
+        <th class="text-right px-4 py-3 font-medium">精度<br><span class="text-gray-600 normal-case">{% if hours >= 24 and hours % 24 == 0 %}直近 {{ hours // 24 }} 日{% else %}直近 {{ hours }} 時間{% endif %}</span></th>
         <th class="text-center px-4 py-3 font-medium">ドリフト</th>
         <th class="text-center px-4 py-3 font-medium w-16"></th>
       </tr>

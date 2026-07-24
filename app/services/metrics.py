@@ -158,14 +158,14 @@ def get_latest_accuracy(
 
 @log_call
 def get_accuracy_over_time(
-    db: Session, project_id: str, days: int = 7, task_type: str = "binary",
+    db: Session, project_id: str, hours: int = 168, task_type: str = "binary",
     metric_name: str | None = None, threshold: float = 0.5,
 ) -> dict:
     if settings.is_dataiku:
-        return _dku_get_accuracy_over_time(project_id, days, task_type, metric_name, threshold)
+        return _dku_get_accuracy_over_time(project_id, hours, task_type, metric_name, threshold)
 
     metric = resolve_metric(metric_name, task_type)
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.utcnow() - timedelta(hours=hours)
     logs = (
         db.query(InferenceLog)
         .filter(
@@ -273,11 +273,11 @@ def _dku_get_latest_accuracy(project_id: str, hours: int, task_type: str, metric
 
 
 @log_call
-def _dku_get_accuracy_over_time(project_id: str, days: int, task_type: str, metric_name: str | None = None, threshold: float = 0.5) -> dict:
+def _dku_get_accuracy_over_time(project_id: str, hours: int, task_type: str, metric_name: str | None = None, threshold: float = 0.5) -> dict:
     from ..dataiku_client import get_inference_logs_df
 
     metric = resolve_metric(metric_name, task_type)
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.utcnow() - timedelta(hours=hours)
     df = get_inference_logs_df(project_id, since)
 
     df = df[df["actual_values"].notna()].sort_values("request_timestamp")
