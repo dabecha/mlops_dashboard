@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..exceptions import NotFoundError, ValidationError
 from ..models import DeployedModel, InferenceLog, Project, ProjectConfig, ReferenceLog
 from ..schemas import (
     BulkDeleteLogsRequest,
@@ -32,7 +33,7 @@ router = APIRouter(prefix="/api", tags=["ingest"])
 @log_call
 def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
     if db.query(Project).filter(Project.project_name == body.project_name).first():
-        raise HTTPException(status_code=400, detail="同名のプロジェクトが既に存在します")
+        raise ValidationError("同名のプロジェクトが既に存在します")
     project = Project(**body.model_dump())
     db.add(project)
     db.commit()
@@ -52,11 +53,11 @@ def delete_project(project_id: str, db: Session = Depends(get_db)):
     if settings.is_dataiku:
         from ..dataiku_client import delete_project as dku_delete_project
         if not dku_delete_project(project_id):
-            raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+            raise NotFoundError("プロジェクトが見つかりません")
         return
     project = db.get(Project, project_id)
     if not project:
-        raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+        raise NotFoundError("プロジェクトが見つかりません")
     db.delete(project)
     db.commit()
 
@@ -69,7 +70,7 @@ def register_deployed_model(
     db: Session = Depends(get_db),
 ):
     if not db.get(Project, project_id):
-        raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+        raise NotFoundError("プロジェクトが見つかりません")
     model = DeployedModel(
         project_id=project_id,
         model_version=body.model_version,
@@ -91,7 +92,7 @@ def register_reference_log(
     db: Session = Depends(get_db),
 ):
     if not db.get(Project, project_id):
-        raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+        raise NotFoundError("プロジェクトが見つかりません")
     ref_log = ReferenceLog(
         project_id=project_id,
         model_id=body.model_id,
@@ -117,7 +118,7 @@ def _check_project_exists(db: Session, project_id: str) -> bool:
 @log_call
 def get_config(project_id: str, db: Session = Depends(get_db)):
     if not _check_project_exists(db, project_id):
-        raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+        raise NotFoundError("プロジェクトが見つかりません")
     cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
     if cfg:
         return cfg
@@ -128,7 +129,7 @@ def get_config(project_id: str, db: Session = Depends(get_db)):
 @log_call
 def upsert_config(project_id: str, body: ProjectConfigUpdate, db: Session = Depends(get_db)):
     if not _check_project_exists(db, project_id):
-        raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
+        raise NotFoundError("プロジェクトが見つかりません")
     cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
     if cfg:
         for k, v in body.model_dump().items():
@@ -151,14 +152,14 @@ def delete_log(
 ):
     if settings.is_dataiku:
         if project_id is None:
-            raise HTTPException(status_code=400, detail="dataiku モードでは project_id が必要です")
+            raise ValidationError("dataiku モードでは project_id が必要です")
         from ..dataiku_client import delete_inference_logs
         if delete_inference_logs(project_id, [log_id]) == 0:
-            raise HTTPException(status_code=404, detail="ログが見つかりません")
+            raise NotFoundError("ログが見つかりません")
         return
     log = db.get(InferenceLog, log_id)
     if not log:
-        raise HTTPException(status_code=404, detail="ログが見つかりません")
+        raise NotFoundError("ログが見つかりません")
     db.delete(log)
     db.commit()
 
@@ -168,7 +169,7 @@ def delete_log(
 def bulk_delete_logs(body: BulkDeleteLogsRequest, db: Session = Depends(get_db)):
     if settings.is_dataiku:
         if body.project_id is None:
-            raise HTTPException(status_code=400, detail="dataiku モードでは project_id が必要です")
+            raise ValidationError("dataiku モードでは project_id が必要です")
         from ..dataiku_client import delete_inference_logs
         count = delete_inference_logs(body.project_id, body.log_ids)
         return {"deleted": count}
@@ -186,9 +187,7 @@ def bulk_delete_logs(body: BulkDeleteLogsRequest, db: Session = Depends(get_db))
 def log_inference(body: InferenceLogCreate, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.project_name == body.project_name).first()
     if not project:
-        raise HTTPException(
-            status_code=404, detail=f"プロジェクト '{body.project_name}' が見つかりません"
-        )
+        raise NotFoundError(f"プロジェクト '{body.project_name}' が見つかりません")
 
     log = InferenceLog(
         project_id=project.project_id,

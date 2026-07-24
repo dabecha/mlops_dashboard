@@ -131,6 +131,16 @@
     document.getElementById('config-dialog').addEventListener('click', function(e) {
       if (e.target === this) this.close();
     });
+
+    // htmx リクエストがエラー応答（4xx/5xx）を返した場合、
+    // サーバーのエラー断片(partials/error.html)を対象要素にインライン差し込みする。
+    document.body.addEventListener('htmx:responseError', function(evt) {
+      const target = evt.detail.target;
+      const html = evt.detail.xhr && evt.detail.xhr.response;
+      if (target && html) {
+        target.innerHTML = html;
+      }
+    });
   </script>
 </body>
 </html>

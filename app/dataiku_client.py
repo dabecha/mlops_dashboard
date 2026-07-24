@@ -25,6 +25,7 @@ from datetime import datetime
 
 from sqlalchemy import String
 
+from .exceptions import ConfigurationError, DataIntegrityError, DataSourceError
 from .models import InferenceLog, Project
 from .settings import settings
 from .logging_utils import log_call
@@ -40,17 +41,15 @@ def _ensure_imports():
     try:
         import pandas as pd
     except ImportError as exc:
-        raise RuntimeError(
-            "pandas がインストールされていません。"
-            "Dataiku モードでは pandas が必要です: uv add pandas"
+        raise ConfigurationError(
+            log_message="pandas がインストールされていません。Dataiku モードでは pandas が必要です: uv add pandas"
         ) from exc
 
     try:
         import dataiku
     except ImportError as exc:
-        raise RuntimeError(
-            "dataiku パッケージが見つかりません。"
-            "APP_MODE=dev/production は Dataiku DSS 環境内で実行してください。"
+        raise ConfigurationError(
+            log_message="dataiku パッケージが見つかりません。APP_MODE=dev/production は Dataiku DSS 環境内で実行してください。"
         ) from exc
 
     return dataiku, pd
@@ -64,11 +63,16 @@ def _fetch_df(dataset_name: str, project_key: str | None = None):
     """
     dataiku, _ = _ensure_imports()
     effective_key = project_key or settings.dku_mgmt_project_key
-    if effective_key:
-        ds = dataiku.Dataset(dataset_name, project_key=effective_key)
-    else:
-        ds = dataiku.Dataset(dataset_name)
-    return ds.get_dataframe()
+    try:
+        if effective_key:
+            ds = dataiku.Dataset(dataset_name, project_key=effective_key)
+        else:
+            ds = dataiku.Dataset(dataset_name)
+        return ds.get_dataframe()
+    except Exception as exc:
+        raise DataSourceError(
+            log_message=f"データセット取得に失敗: dataset={dataset_name}, project_key={effective_key}: {exc}"
+        ) from exc
 
 
 @log_call
@@ -79,11 +83,16 @@ def _write_df(df, dataset_name: str, project_key: str | None = None) -> None:
     """
     dataiku, _ = _ensure_imports()
     effective_key = project_key or settings.dku_mgmt_project_key
-    if effective_key:
-        ds = dataiku.Dataset(dataset_name, project_key=effective_key)
-    else:
-        ds = dataiku.Dataset(dataset_name)
-    ds.write_with_schema(df)
+    try:
+        if effective_key:
+            ds = dataiku.Dataset(dataset_name, project_key=effective_key)
+        else:
+            ds = dataiku.Dataset(dataset_name)
+        ds.write_with_schema(df)
+    except Exception as exc:
+        raise DataSourceError(
+            log_message=f"データセット書き込みに失敗: dataset={dataset_name}, project_key={effective_key}: {exc}"
+        ) from exc
 
 
 @log_call
@@ -123,11 +132,8 @@ def get_projects() -> list[Project]:
     インスタンスとして返す。
     """
     logger.info("get_projects: dataset=%s project=%s", settings.dku_ds_projects, settings.dku_mgmt_project_key)
-    try:
-        df = _fetch_df(settings.dku_ds_projects)
-    except Exception:
-        logger.exception("get_projects: データセット取得に失敗しました")
-        raise
+    df = _fetch_df(settings.dku_ds_projects)
+    _require_columns(df, ["project_id", "created_at"], settings.dku_ds_projects)
     df["created_at"] = _to_naive_utc(df["created_at"])
     df = df.sort_values("created_at").reset_index(drop=True)
     projects = [_row_to_model(row, Project) for _, row in df.iterrows()]
@@ -181,6 +187,7 @@ def get_inference_logs_df(project_id: str, since: datetime | None = None):
     if df.empty:
         return df
 
+    _require_columns(df, ["request_timestamp"], settings.dku_ds_inference_logs)
     if "project_id" in df.columns:
         df = df[df["project_id"].astype(str) == str(project_id)].copy()
 
@@ -302,6 +309,15 @@ def get_reference_logs_df(project_id: str, model_id: str | None = None):
 
 # ── ユーティリティ ───────────────────────────────────────────────────────────
 
+def _require_columns(df, columns: list[str], dataset_name: str) -> None:
+    """DataFrame に必須カラムが揃っているか検証する（欠落時は DataIntegrityError）。"""
+    missing = [c for c in columns if c not in df.columns]
+    if missing:
+        raise DataIntegrityError(
+            log_message=f"データセット {dataset_name} に必須カラムがありません: {missing}"
+        )
+
+
 @log_call
 def _row_to_dict(row) -> dict:
     """pandas Series を dict に変換（NaN → None, numpy 型 → Python 型）。"""
@@ -348,5 +364,10 @@ def parse_json_col(val) -> dict | None:
     if isinstance(val, float) and np.isnan(val):
         return None
     if isinstance(val, str):
-        return json.loads(val)
+        try:
+            return json.loads(val)
+        except (ValueError, TypeError) as exc:
+            raise DataIntegrityError(
+                log_message=f"JSON カラムのパースに失敗: {val[:100]!r}: {exc}"
+            ) from exc
     return val

@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..exceptions import NotFoundError
 from ..models import InferenceLog, Project
 from ..services import config as config_svc
 from ..services import drift as drift_svc
@@ -119,7 +120,7 @@ async def all_panels(
 ):
     project = _get_project(db, project_id)
     if not project:
-        return HTMLResponse("<p class='text-gray-400 text-center py-8'>プロジェクトが見つかりません</p>")
+        raise NotFoundError("プロジェクトが見つかりません")
 
     cfg = config_svc.get_config(db, project_id)
     summary = metrics_svc.get_summary(db, project_id, hours)
@@ -245,7 +246,7 @@ async def config_modal(
 ):
     project = _get_project(db, project_id)
     if not project:
-        return HTMLResponse("<p class='text-red-400 p-4'>プロジェクトが見つかりません</p>")
+        raise NotFoundError("プロジェクトが見つかりません")
     cfg = config_svc.get_config(db, project_id)
     return templates.TemplateResponse(
         request,

@@ -5,6 +5,8 @@ from enum import Enum
 
 from dotenv import load_dotenv
 
+from .exceptions import ConfigurationError
+
 load_dotenv()
 
 class AppMode(str, Enum):
@@ -18,11 +20,10 @@ class Settings:
         raw_mode = os.environ.get("APP_MODE", "local_dev")
         try:
             self.app_mode: AppMode = AppMode(raw_mode)
-        except ValueError:
-            raise ValueError(
-                f"APP_MODE の値が不正です: '{raw_mode}'. "
-                "有効な値: local_dev | dev | production"
-            )
+        except ValueError as exc:
+            raise ConfigurationError(
+                log_message=f"APP_MODE の値が不正です: '{raw_mode}'. 有効な値: local_dev | dev | production"
+            ) from exc
 
         # ── SQLite (local_dev) ────────────────────────────────────────
         self.sqlite_url: str = os.environ.get("DATABASE_URL", "sqlite:///./mlops.db")

@@ -6,9 +6,20 @@ import numpy as np
 from scipy import stats
 from sqlalchemy.orm import Session
 
+from ..exceptions import DataIntegrityError
 from ..models import DeployedModel, InferenceLog, ReferenceLog
 from ..settings import settings
 from ..logging_utils import log_call
+
+
+def _loads(raw: str):
+    """特徴量などの JSON 文字列を dict に変換する（失敗時は DataIntegrityError）。"""
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError) as exc:
+        raise DataIntegrityError(
+            log_message=f"特徴量 JSON のパースに失敗: {str(raw)[:100]!r}: {exc}"
+        ) from exc
 
 
 @log_call
@@ -125,7 +136,7 @@ def detect_feature_drift(
 
     feature_importance: dict[str, float] = {}
     if latest_model.feature_importance:
-        feature_importance = json.loads(latest_model.feature_importance)
+        feature_importance = _loads(latest_model.feature_importance)
 
     ref_logs = (
         db.query(ReferenceLog)
@@ -138,7 +149,7 @@ def detect_feature_drift(
         .all()
     )
 
-    ref_features: list[dict] = [json.loads(r.feature_values) for r in ref_logs]
+    ref_features: list[dict] = [_loads(r.feature_values) for r in ref_logs]
 
     if not ref_features:
         return {
@@ -170,7 +181,7 @@ def detect_feature_drift(
             "model_version": latest_version,
         }
 
-    current_features = [json.loads(l.feature_values) for l in current_logs]
+    current_features = [_loads(l.feature_values) for l in current_logs]
     return _compute_feature_drift_result(
         ref_features, current_features, feature_importance,
         psi_warning, psi_alert, latest_version,

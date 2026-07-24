@@ -1,0 +1,65 @@
+"""アプリケーション共通の業務例外。
+
+各例外は以下を保持する:
+  - user_message : ユーザー向け（日本語）メッセージ。API では JSON の detail、
+                   UI では画面表示に使われる。内部情報は含めない。
+  - log_message  : 内部ログ用の詳細メッセージ（任意。無ければ user_message）。
+  - status_code  : HTTP ステータスコード。
+
+グローバル例外ハンドラ（main.py）がこれらを捕捉し、
+/api/* は JSON、UI/htmx は HTML でユーザーに返す。
+"""
+from __future__ import annotations
+
+
+class AppError(Exception):
+    """業務例外の基底クラス。"""
+
+    status_code: int = 500
+    default_user_message: str = "予期しないエラーが発生しました"
+
+    def __init__(self, user_message: str | None = None, *, log_message: str | None = None):
+        self.user_message = user_message or self.default_user_message
+        self.log_message = log_message or self.user_message
+        super().__init__(self.log_message)
+
+
+class NotFoundError(AppError):
+    """対象リソースが存在しない（404）。"""
+
+    status_code = 404
+    default_user_message = "対象が見つかりません"
+
+
+class ValidationError(AppError):
+    """入力内容が不正、または前提条件を満たさない（400）。"""
+
+    status_code = 400
+    default_user_message = "入力内容が正しくありません"
+
+
+class DataSourceError(AppError):
+    """データソース（Dataiku 等）へのアクセスに失敗した（503）。"""
+
+    status_code = 503
+    default_user_message = "データソースへのアクセスに失敗しました。時間をおいて再度お試しください。"
+
+
+class DataIntegrityError(AppError):
+    """データの形式・整合性に問題がある（422）。
+
+    例: JSON カラムのパース失敗、データセットに必須カラムが存在しない。
+    """
+
+    status_code = 422
+    default_user_message = "データの形式が正しくありません"
+
+
+class ConfigurationError(AppError):
+    """サーバーの設定・実行環境に不備がある（500）。
+
+    例: Dataiku モードで pandas / dataiku 未導入、APP_MODE 不正。
+    """
+
+    status_code = 500
+    default_user_message = "サーバー設定に問題があります。管理者にお問い合わせください。"
