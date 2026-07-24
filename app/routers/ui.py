@@ -59,7 +59,7 @@ def _get_project(db: Session, project_id: str):
     return db.get(Project, project_id)
 
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("/detail", response_class=HTMLResponse)
 @log_call
 async def index(
     request: Request,
@@ -73,6 +73,7 @@ async def index(
     )
 
 
+@router.get("/", response_class=HTMLResponse)
 @router.get("/summary", response_class=HTMLResponse)
 @log_call
 async def summary_page(request: Request, db: Session = Depends(get_db)):
