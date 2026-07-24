@@ -11,9 +11,10 @@ DEFAULTS: dict = {
     "psi_warning": 0.10,
     "psi_alert": 0.25,
     "ks_alpha": 0.05,
-    "metric_name": "Accuracy",
+    "metric_name": "ROC-AUC",
     "metric_warning": 75.0,
     "metric_alert": 60.0,
+    "classification_threshold": 0.5,
 }
 
 

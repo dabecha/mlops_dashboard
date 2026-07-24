@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..exceptions import AppError, NotFoundError
 from ..formatting import format_duration
+from ..metrics_catalog import is_higher_better, metrics_for_task
 from ..models import InferenceLog, Project
 from ..services import config as config_svc
 from ..services import drift as drift_svc
@@ -27,6 +28,8 @@ router = APIRouter(tags=["ui"])
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "templates")
 templates = Jinja2Templates(directory=_TEMPLATE_DIR)
 templates.env.filters["duration"] = format_duration
+templates.env.globals["metrics_for_task"] = metrics_for_task
+templates.env.globals["metric_higher_better"] = is_higher_better
 
 
 @log_call
@@ -101,7 +104,10 @@ async def summary_panels(
                 check_project_datasets(p.project_id)
             cfg = config_svc.get_config(db, p.project_id)
             summary = metrics_svc.get_summary(db, p.project_id, hours)
-            accuracy = metrics_svc.get_latest_accuracy(db, p.project_id, hours=168, task_type=p.task_type)
+            accuracy = metrics_svc.get_latest_accuracy(
+            db, p.project_id, hours=168, task_type=p.task_type,
+            metric_name=cfg["metric_name"], threshold=cfg["classification_threshold"],
+        )
             drift = drift_svc.detect_drift(
                 db, p.project_id,
                 window_size=cfg["drift_window_size"],
@@ -147,7 +153,10 @@ async def all_panels(
     cfg = config_svc.get_config(db, project_id)
     summary = metrics_svc.get_summary(db, project_id, hours)
     latency = metrics_svc.get_latency_distribution(db, project_id, hours)
-    accuracy = metrics_svc.get_accuracy_over_time(db, project_id, days, project.task_type)
+    accuracy = metrics_svc.get_accuracy_over_time(
+        db, project_id, days, project.task_type,
+        metric_name=cfg["metric_name"], threshold=cfg["classification_threshold"],
+    )
     drift = drift_svc.detect_drift(
         db, project_id,
         window_size=cfg["drift_window_size"],

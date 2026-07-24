@@ -7,6 +7,7 @@ import numpy as np
 from sqlalchemy.orm import Session
 
 from ..formatting import format_duration
+from ..metrics_catalog import compute_metric, resolve_metric
 from ..models import InferenceLog
 from ..settings import settings
 from ..logging_utils import log_call
@@ -125,11 +126,13 @@ def get_latency_distribution(db: Session, project_id: str, hours: int = 24) -> d
 
 @log_call
 def get_latest_accuracy(
-    db: Session, project_id: str, hours: int = 168, task_type: str = "binary"
+    db: Session, project_id: str, hours: int = 168, task_type: str = "binary",
+    metric_name: str | None = None, threshold: float = 0.5,
 ) -> dict:
     if settings.is_dataiku:
-        return _dku_get_latest_accuracy(project_id, hours, task_type)
+        return _dku_get_latest_accuracy(project_id, hours, task_type, metric_name, threshold)
 
+    metric = resolve_metric(metric_name, task_type)
     since = datetime.utcnow() - timedelta(hours=hours)
     logs = (
         db.query(InferenceLog)
@@ -141,33 +144,27 @@ def get_latest_accuracy(
         )
         .all()
     )
-    metric_name = "Accuracy (%)" if _is_classification(task_type) else "MAE"
     if not logs:
-        return {"value": None, "metric_name": metric_name, "sample_count": 0}
+        return {"value": None, "metric_name": metric, "sample_count": 0}
 
-    if _is_classification(task_type):
-        correct = sum(1 for l in logs if (l.prediction_value > 0.5) == bool(l.actual_value))
-        return {
-            "value": round(correct / len(logs) * 100, 1),
-            "metric_name": metric_name,
-            "sample_count": len(logs),
-        }
-    else:
-        mae = sum(abs(l.prediction_value - l.actual_value) for l in logs) / len(logs)
-        return {
-            "value": round(mae, 3),
-            "metric_name": metric_name,
-            "sample_count": len(logs),
-        }
+    y_true = np.array([l.actual_value for l in logs], dtype=float)
+    y_pred = np.array([l.prediction_value for l in logs], dtype=float)
+    return {
+        "value": compute_metric(metric, y_true, y_pred, threshold),
+        "metric_name": metric,
+        "sample_count": len(logs),
+    }
 
 
 @log_call
 def get_accuracy_over_time(
-    db: Session, project_id: str, days: int = 7, task_type: str = "binary"
+    db: Session, project_id: str, days: int = 7, task_type: str = "binary",
+    metric_name: str | None = None, threshold: float = 0.5,
 ) -> dict:
     if settings.is_dataiku:
-        return _dku_get_accuracy_over_time(project_id, days, task_type)
+        return _dku_get_accuracy_over_time(project_id, days, task_type, metric_name, threshold)
 
+    metric = resolve_metric(metric_name, task_type)
     since = datetime.utcnow() - timedelta(days=days)
     logs = (
         db.query(InferenceLog)
@@ -180,26 +177,22 @@ def get_accuracy_over_time(
         .all()
     )
 
-    metric_name = "Accuracy (%)" if _is_classification(task_type) else "MAE"
     if not logs:
-        return {"labels": [], "data": [], "metric_name": metric_name}
+        return {"labels": [], "data": [], "metric_name": metric}
 
     daily: dict[str, list] = defaultdict(list)
     for log in logs:
         daily[log.request_timestamp.strftime("%Y-%m-%d")].append(log)
 
     labels = sorted(daily.keys())
-    values: list[float] = []
+    values: list[float | None] = []
     for day in labels:
         day_logs = daily[day]
-        if _is_classification(task_type):
-            correct = sum(1 for l in day_logs if (l.prediction_value > 0.5) == bool(l.actual_value))
-            values.append(round(correct / len(day_logs) * 100, 2))
-        else:
-            mae = sum(abs(l.prediction_value - l.actual_value) for l in day_logs) / len(day_logs)
-            values.append(round(mae, 4))
+        y_true = np.array([l.actual_value for l in day_logs], dtype=float)
+        y_pred = np.array([l.prediction_value for l in day_logs], dtype=float)
+        values.append(compute_metric(metric, y_true, y_pred, threshold))
 
-    return {"labels": labels, "data": values, "metric_name": metric_name}
+    return {"labels": labels, "data": values, "metric_name": metric}
 
 
 # ── Dataiku 実装 ─────────────────────────────────────────────────────────────
@@ -259,56 +252,46 @@ def _dku_get_latency_distribution(project_id: str, hours: int) -> dict:
 
 
 @log_call
-def _dku_get_latest_accuracy(project_id: str, hours: int, task_type: str) -> dict:
+def _dku_get_latest_accuracy(project_id: str, hours: int, task_type: str, metric_name: str | None = None, threshold: float = 0.5) -> dict:
     from ..dataiku_client import get_inference_logs_df
 
+    metric = resolve_metric(metric_name, task_type)
     since = datetime.utcnow() - timedelta(hours=hours)
     df = get_inference_logs_df(project_id, since)
-    metric_name = "Accuracy (%)" if _is_classification(task_type) else "MAE"
 
     df = df[df["actual_values"].notna() & ~df["is_error"]]
     if df.empty:
-        return {"value": None, "metric_name": metric_name, "sample_count": 0}
+        return {"value": None, "metric_name": metric, "sample_count": 0}
 
-    if _is_classification(task_type):
-        correct = int(((df["prediction_values"] > 0.5) == df["actual_values"].astype(bool)).sum())
-        return {
-            "value": round(correct / len(df) * 100, 1),
-            "metric_name": metric_name,
-            "sample_count": len(df),
-        }
-    else:
-        mae = float((df["prediction_values"] - df["actual_values"]).abs().mean())
-        return {
-            "value": round(mae, 3),
-            "metric_name": metric_name,
-            "sample_count": len(df),
-        }
+    y_true = df["actual_values"].to_numpy(dtype=float)
+    y_pred = df["prediction_values"].to_numpy(dtype=float)
+    return {
+        "value": compute_metric(metric, y_true, y_pred, threshold),
+        "metric_name": metric,
+        "sample_count": len(df),
+    }
 
 
 @log_call
-def _dku_get_accuracy_over_time(project_id: str, days: int, task_type: str) -> dict:
+def _dku_get_accuracy_over_time(project_id: str, days: int, task_type: str, metric_name: str | None = None, threshold: float = 0.5) -> dict:
     from ..dataiku_client import get_inference_logs_df
 
+    metric = resolve_metric(metric_name, task_type)
     since = datetime.utcnow() - timedelta(days=days)
     df = get_inference_logs_df(project_id, since)
-    metric_name = "Accuracy (%)" if _is_classification(task_type) else "MAE"
 
     df = df[df["actual_values"].notna()].sort_values("request_timestamp")
     if df.empty:
-        return {"labels": [], "data": [], "metric_name": metric_name}
+        return {"labels": [], "data": [], "metric_name": metric}
 
     df["_day"] = df["request_timestamp"].dt.strftime("%Y-%m-%d")
     labels = sorted(df["_day"].unique())
-    values: list[float] = []
+    values: list[float | None] = []
 
     for day in labels:
         group = df[df["_day"] == day]
-        if _is_classification(task_type):
-            correct = int(((group["prediction_values"] > 0.5) == group["actual_values"].astype(bool)).sum())
-            values.append(round(correct / len(group) * 100, 2))
-        else:
-            mae = float((group["prediction_values"] - group["actual_values"]).abs().mean())
-            values.append(round(mae, 4))
+        y_true = group["actual_values"].to_numpy(dtype=float)
+        y_pred = group["prediction_values"].to_numpy(dtype=float)
+        values.append(compute_metric(metric, y_true, y_pred, threshold))
 
-    return {"labels": labels, "data": values, "metric_name": metric_name}
+    return {"labels": labels, "data": values, "metric_name": metric}

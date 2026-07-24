@@ -69,9 +69,10 @@ ML プロジェクトごとの閾値設定。未設定の場合はデフォル�
 | `psi_warning` | REAL | NO | `0.10` | PSI 警告閾値 |
 | `psi_alert` | REAL | NO | `0.25` | PSI 異常閾値 |
 | `ks_alpha` | REAL | NO | `0.05` | KS 検定の有意水準 |
-| `metric_name` | VARCHAR(50) | NO | `Accuracy` | 評価指標名（プロジェクト側で設定: ROC-AUC / logloss / MAE / RMSE 等） |
+| `metric_name` | VARCHAR(50) | NO | `ROC-AUC` | 評価指標名（種別ごとの定義リストから選択。分類: ROC-AUC / PR-AUC / Precision / Recall / logloss、回帰: MAE / RMSE / MAPE / R2） |
 | `metric_warning` | REAL | NO | `75.0` | 評価指標の警告閾値（回帰・分類共通） |
 | `metric_alert` | REAL | NO | `60.0` | 評価指標の異常閾値（回帰・分類共通） |
+| `classification_threshold` | REAL | NO | `0.5` | 二値分類でラベル化する確率閾値（Precision / Recall で使用） |
 | `updated_at` | DATETIME | NO | 現在時刻 | 最終更新日時（日本時間） |
 
 ---

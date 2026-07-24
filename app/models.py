@@ -44,10 +44,12 @@ class ProjectConfig(Base):
     ks_alpha = Column(Float, default=0.05)
 
     # 評価指標名（プロジェクト側で設定）: ROC-AUC / logloss / MAE / RMSE / Accuracy 等
-    metric_name = Column(String(50), default="Accuracy")
+    metric_name = Column(String(50), default="ROC-AUC")
     # 評価指標の警告/異常閾値（回帰・分類を問わず汎用。旧 accuracy_* / mae_* を統合）
     metric_warning = Column(Float, default=75.0)
     metric_alert = Column(Float, default=60.0)
+    # 二値分類でラベル化する確率閾値（Precision / Recall で使用）
+    classification_threshold = Column(Float, default=0.5)
 
     updated_at = Column(DateTime, default=datetime.utcnow)
 

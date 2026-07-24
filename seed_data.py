@@ -201,9 +201,9 @@ def main() -> None:
                 "project_name": "churn-model",
                 "description": "顧客離脱予測モデル（二値分類）",
                 "task_type": "binary",
-                "metric_name": "logloss",       # 分類・小さいほど良い
-                "metric_warning": 0.40,
-                "metric_alert": 0.55,
+                "metric_name": "Recall",        # 分類・大きいほど良い
+                "metric_warning": 0.75,
+                "metric_alert": 0.60,
                 "n": 300,
                 "days": 5,
                 "base_latency": 200.0,

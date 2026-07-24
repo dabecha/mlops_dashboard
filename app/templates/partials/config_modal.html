@@ -93,13 +93,28 @@
 
       <div class="mb-4">
         <label class="block text-xs text-gray-400 mb-1">評価指標名
-          <span class="text-gray-600 ml-1" title="プロジェクトで用いる評価指標の名称">?</span>
+          <span class="text-gray-600 ml-1" title="プロジェクト種別に応じた指標から選択">?</span>
         </label>
-        <input type="text" name="metric_name" maxlength="50"
-          value="{{ config.metric_name }}"
-          placeholder="例: ROC-AUC, logloss, MAE, RMSE"
+        <select name="metric_name"
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" required>
+          {% for m in metrics_for_task(project.task_type) %}
+          <option value="{{ m }}" {% if m == config.metric_name %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {% if project.task_type != 'regression' %}
+      <div class="mb-4">
+        <label class="block text-xs text-gray-400 mb-1">分類しきい値
+          <span class="text-gray-600 ml-1" title="陽性としてラベル化する確率のしきい値（Precision / Recall で使用）">?</span>
+        </label>
+        <input type="number" name="classification_threshold" min="0" max="1" step="0.01"
+          value="{{ config.classification_threshold }}"
           class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" required>
       </div>
+      {% else %}
+      <input type="hidden" name="classification_threshold" value="{{ config.classification_threshold }}">
+      {% endif %}
 
       <div class="grid grid-cols-2 gap-4">
         <div>
@@ -122,11 +137,9 @@
         </div>
       </div>
       <p class="text-xs text-gray-600 mt-2">
-        {% if project.task_type == 'regression' %}
-        値が小さいほど良い指標: 値 &lt; 警告閾値 → 正常（緑）　/　&lt; 異常閾値 → 警告（黄）　/　それ以外 → 異常（赤）
-        {% else %}
-        値が大きいほど良い指標: 値 ≥ 警告閾値 → 正常（緑）　/　≥ 異常閾値 → 警告（黄）　/　それ以外 → 異常（赤）
-        {% endif %}
+        指標により大小の良し悪しが異なります（例: ROC-AUC / PR-AUC / Precision / Recall / R² は大きいほど良い、MAE / RMSE / MAPE は小さいほど良い）。
+        大きいほど良い指標は「値 ≥ 警告閾値 → 正常 / ≥ 異常閾値 → 警告 / それ以外 → 異常」、
+        小さいほど良い指標は「値 &lt; 警告閾値 → 正常 / &lt; 異常閾値 → 警告 / それ以外 → 異常」で判定します。
       </p>
     </section>
 
