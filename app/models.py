@@ -88,13 +88,13 @@ class InferenceLog(Base):
 
     log_id = Column(String(100), primary_key=True, default=_gen_id, index=True)
     project_id = Column(String(100), ForeignKey("m_projects.project_id"), nullable=False, index=True)
-    batch_log_id = Column(String(100), nullable=True, index=True)
+    # 推論単位。バッチ推論は複数 log_id が同一 batch_log_id を共有、API 推論は 1 件。
+    batch_log_id = Column(String(100), nullable=False, index=True)
     request_timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     request_id = Column(String(100), nullable=True)
     model_id = Column(String(100), ForeignKey("t_deployed_models.model_id"), nullable=True, index=True)
     prediction_values = Column(Float, nullable=False)
     actual_values = Column(Float, nullable=True)
-    response_time_ms = Column(Float, nullable=False)
     is_error = Column(Boolean, default=False)
     feature_values = Column(Text, nullable=True)    # JSON: {"age": 35.0, ...}
     feature_dtypes = Column(Text, nullable=True)    # JSON: {"age": "float32", ...}
@@ -103,3 +103,13 @@ class InferenceLog(Base):
 
     project = relationship("Project", back_populates="logs")
     deployed_model = relationship("DeployedModel", back_populates="logs")
+
+    @property
+    def response_time_ms(self) -> float | None:
+        """レコード単位の応答時間（updated_at − request_timestamp, ミリ秒）。
+
+        応答時間は保存せず、リクエスト受付〜更新（推論完了）時刻の差から算出する。
+        """
+        if self.updated_at is None or self.request_timestamp is None:
+            return None
+        return (self.updated_at - self.request_timestamp).total_seconds() * 1000.0

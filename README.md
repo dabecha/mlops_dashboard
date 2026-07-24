@@ -114,18 +114,17 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
 |---|---|---|---|---|
 | `log_id` | VARCHAR(100) | NO | auto | 主キー |
 | `project_id` | VARCHAR(100) | NO | — | `m_projects.project_id` への外部キー |
-| `batch_log_id` | VARCHAR(100) | YES | NULL | 推論バッチ単位の識別子 |
-| `request_timestamp` | DATETIME | NO | 現在時刻 | 推論実行日時（日本時間） |
+| `batch_log_id` | VARCHAR(100) | NO | — | 推論単位の識別子。バッチ推論は複数 `log_id` が共有、API 推論は 1 件 |
+| `request_timestamp` | DATETIME | NO | 現在時刻 | 推論リクエスト受付日時（日本時間） |
 | `request_id` | VARCHAR(100) | YES | NULL | 呼び出し元が付与するリクエスト識別子 |
 | `model_id` | VARCHAR(100) | YES | NULL | `t_deployed_models.model_id` への外部キー |
 | `prediction_values` | REAL | NO | — | モデルの予測値（分類: 確率 0–1、回帰: 数値） |
 | `actual_values` | REAL | YES | NULL | 正解ラベル（遅延ラベリングで後から投入可） |
-| `response_time_ms` | REAL | NO | — | 推論応答時間（ms） |
 | `is_error` | BOOLEAN | NO | `false` | エラー発生フラグ |
 | `feature_values` | TEXT | YES | NULL | 入力特徴量 JSON（例: `{"age": 35.0, "amount": 5200.0}`） |
 | `feature_dtypes` | TEXT | YES | NULL | 入力特徴量データ型 JSON |
 | `created_at` | DATETIME | NO | 現在時刻 | 登録日時（日本時間） |
-| `updated_at` | DATETIME | NO | 現在時刻 | 最終更新日時（日本時間） |
+| `updated_at` | DATETIME | NO | 現在時刻 | 更新（推論完了）日時。`request_timestamp` との差が応答時間 |
 
 ---
 
@@ -152,8 +151,7 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
     ks_alpha                            FK model_id VARCHAR(100) →      is_activate        BOOLEAN
     metric_name                         prediction_values              created_at         DATETIME
     metric_warning/alert                actual_values
-    updated_at                          response_time_ms
-                                        is_error
+    updated_at                          is_error
                                         feature_values
                                         feature_dtypes
                                         created_at
@@ -216,8 +214,8 @@ Content-Type: application/json
 
 {
   "project_name": "fraud-detection",         # 必須
+  "batch_log_id": "batch-00001",             # 必須: 推論単位の識別子（API 推論は 1 件）
   "prediction_values": 0.82,                 # 必須: モデル出力値
-  "response_time_ms": 130.5,                 # 必須: 応答時間 (ms)
   "request_id": "req-00001",                 # 任意
   "model_id": "v1.2.0",                      # 任意: t_deployed_models.model_id
   "actual_values": 1.0,                      # 任意: 正解ラベル（遅延ラベリング対応）
@@ -226,6 +224,8 @@ Content-Type: application/json
   "feature_values": {"age": 35.0, "amount": 5200.0},  # 任意: 入力特徴量
   "feature_dtypes": {"age": "float32", "amount": "float32"}  # 任意
 }
+# 応答時間は保存せず、request_timestamp と updated_at（推論完了時刻）の差から
+# batch_log_id 単位で算出される。
 ```
 
 ### その他のエンドポイント

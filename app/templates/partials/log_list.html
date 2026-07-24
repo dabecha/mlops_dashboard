@@ -68,7 +68,7 @@
             {% if log.actual_values is not none %}{{ "%.4f" | format(log.actual_values) }}{% else %}—{% endif %}
           </td>
           <td class="px-3 py-2.5 text-right font-mono text-xs text-gray-300">
-            {{ "%.1f" | format(log.response_time_ms) }} ms
+            {{ log.response_time_ms | duration }}
           </td>
           <td class="px-3 py-2.5 text-center">
             {% if log.is_error %}

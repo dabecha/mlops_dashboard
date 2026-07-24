@@ -22,7 +22,7 @@
   <!-- 平均レイテンシ -->
   <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
     <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">平均応答時間</p>
-    <p class="text-3xl font-bold text-white">{{ summary.avg_latency_ms }}<span class="text-base font-normal text-gray-400"> ms</span></p>
+    <p class="text-2xl font-bold text-white">{{ summary.avg_latency_ms | duration }}</p>
     <p class="text-xs text-gray-500 mt-1">直近 {{ hours }}h</p>
   </div>
 
@@ -32,15 +32,15 @@
     <div class="space-y-1 text-sm">
       <div class="flex justify-between">
         <span class="text-gray-400">P50</span>
-        <span class="text-white font-mono">{{ summary.p50_latency_ms }} ms</span>
+        <span class="text-white font-mono">{{ summary.p50_latency_ms | duration }}</span>
       </div>
       <div class="flex justify-between">
         <span class="text-gray-400">P95</span>
-        <span class="text-yellow-400 font-mono">{{ summary.p95_latency_ms }} ms</span>
+        <span class="text-yellow-400 font-mono">{{ summary.p95_latency_ms | duration }}</span>
       </div>
       <div class="flex justify-between">
         <span class="text-gray-400">P99</span>
-        <span class="text-orange-400 font-mono">{{ summary.p99_latency_ms }} ms</span>
+        <span class="text-orange-400 font-mono">{{ summary.p99_latency_ms | duration }}</span>
       </div>
     </div>
   </div>

@@ -197,7 +197,6 @@ def log_inference(body: InferenceLogCreate, db: Session = Depends(get_db)):
         model_id=body.model_id,
         prediction_values=body.prediction_values,
         actual_values=body.actual_values,
-        response_time_ms=body.response_time_ms,
         is_error=body.is_error,
         feature_values=json.dumps(body.feature_values) if body.feature_values else None,
         feature_dtypes=json.dumps(body.feature_dtypes) if body.feature_dtypes else None,

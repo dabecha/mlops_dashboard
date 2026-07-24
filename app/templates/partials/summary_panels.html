@@ -143,8 +143,8 @@
         <!-- 応答時間 -->
         <td class="px-4 py-4 text-right">
           {% if s.total_requests > 0 %}
-          <span class="text-white font-mono">{{ s.avg_latency_ms }} ms</span>
-          <div class="text-xs text-gray-500">P95: {{ s.p95_latency_ms }} ms</div>
+          <span class="text-white font-mono">{{ s.avg_latency_ms | duration }}</span>
+          <div class="text-xs text-gray-500">P95: {{ s.p95_latency_ms | duration }}</div>
           {% else %}
           <span class="text-gray-600">—</span>
           {% endif %}

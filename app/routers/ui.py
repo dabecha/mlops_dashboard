@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..exceptions import AppError, NotFoundError
+from ..formatting import format_duration
 from ..models import InferenceLog, Project
 from ..services import config as config_svc
 from ..services import drift as drift_svc
@@ -25,6 +26,7 @@ router = APIRouter(tags=["ui"])
 
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "templates")
 templates = Jinja2Templates(directory=_TEMPLATE_DIR)
+templates.env.filters["duration"] = format_duration
 
 
 @log_call

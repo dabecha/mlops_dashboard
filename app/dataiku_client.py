@@ -238,6 +238,8 @@ def get_inference_logs_df(project_id: str, since: datetime | None = None):
         df = df[df["project_id"].astype(str) == str(project_id)].copy()
 
     df["request_timestamp"] = _to_naive_utc(df["request_timestamp"])
+    if "updated_at" in df.columns:
+        df["updated_at"] = _to_naive_utc(df["updated_at"])
     if since is not None:
         df = df[df["request_timestamp"] >= since]
     if "is_error" in df.columns:

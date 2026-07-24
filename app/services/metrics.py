@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import numpy as np
 from sqlalchemy.orm import Session
 
+from ..formatting import format_duration
 from ..models import InferenceLog
 from ..settings import settings
 from ..logging_utils import log_call
@@ -14,6 +15,39 @@ from ..logging_utils import log_call
 @log_call
 def _is_classification(task_type: str) -> bool:
     return task_type != "regression"
+
+
+@log_call
+def _batch_latencies_ms(rows) -> list[float]:
+    """(batch_log_id, request_timestamp, updated_at) の反復から、
+    batch_log_id 単位の応答時間(ms)のリストを返す。
+
+    応答時間(batch) = ( max(updated_at) − min(request_timestamp) ) × 1000
+    """
+    span: dict = {}
+    for batch_id, req_ts, upd in rows:
+        if req_ts is None or upd is None:
+            continue
+        s = span.get(batch_id)
+        if s is None:
+            span[batch_id] = [req_ts, upd]
+        else:
+            if req_ts < s[0]:
+                s[0] = req_ts
+            if upd > s[1]:
+                s[1] = upd
+    return [(s[1] - s[0]).total_seconds() * 1000.0 for s in span.values()]
+
+
+@log_call
+def _dku_batch_latencies_ms(df) -> list[float]:
+    """Dataiku DataFrame から batch_log_id 単位の応答時間(ms)のリストを返す。"""
+    if df.empty or "batch_log_id" not in df.columns or "updated_at" not in df.columns:
+        return []
+    g = df.groupby("batch_log_id").agg(
+        start=("request_timestamp", "min"), end=("updated_at", "max")
+    )
+    return ((g["end"] - g["start"]).dt.total_seconds() * 1000.0).tolist()
 
 
 # ── SQLite 実装 ──────────────────────────────────────────────────────────────
@@ -44,7 +78,10 @@ def get_summary(db: Session, project_id: str, hours: int = 24) -> dict:
 
     total = len(logs)
     errors = sum(1 for l in logs if l.is_error)
-    latencies = sorted(l.response_time_ms for l in logs)
+    latencies = sorted(_batch_latencies_ms(
+        (l.batch_log_id, l.request_timestamp, l.updated_at) for l in logs
+    ))
+    n_batches = len(latencies)
 
     def pct(data: list[float], p: float) -> float:
         idx = min(int(len(data) * p / 100), len(data) - 1)
@@ -54,10 +91,10 @@ def get_summary(db: Session, project_id: str, hours: int = 24) -> dict:
         "total_requests": total,
         "error_count": errors,
         "error_rate": round(errors / total * 100, 2),
-        "avg_latency_ms": round(sum(latencies) / total, 2),
-        "p50_latency_ms": round(pct(latencies, 50), 2),
-        "p95_latency_ms": round(pct(latencies, 95), 2),
-        "p99_latency_ms": round(pct(latencies, 99), 2),
+        "avg_latency_ms": round(sum(latencies) / n_batches, 2) if n_batches else 0.0,
+        "p50_latency_ms": round(pct(latencies, 50), 2) if n_batches else 0.0,
+        "p95_latency_ms": round(pct(latencies, 95), 2) if n_batches else 0.0,
+        "p99_latency_ms": round(pct(latencies, 99), 2) if n_batches else 0.0,
     }
 
 
@@ -68,7 +105,7 @@ def get_latency_distribution(db: Session, project_id: str, hours: int = 24) -> d
 
     since = datetime.utcnow() - timedelta(hours=hours)
     rows = (
-        db.query(InferenceLog.response_time_ms)
+        db.query(InferenceLog.batch_log_id, InferenceLog.request_timestamp, InferenceLog.updated_at)
         .filter(
             InferenceLog.project_id == project_id,
             InferenceLog.request_timestamp >= since,
@@ -76,13 +113,13 @@ def get_latency_distribution(db: Session, project_id: str, hours: int = 24) -> d
         )
         .all()
     )
-    latencies = [r[0] for r in rows]
+    latencies = _batch_latencies_ms(rows)
     if not latencies:
         return {"labels": [], "counts": []}
 
     arr = np.array(latencies)
     counts, edges = np.histogram(arr, bins=20)
-    labels = [f"{edges[i]:.0f}–{edges[i+1]:.0f}" for i in range(len(edges) - 1)]
+    labels = [f"{format_duration(edges[i])}–{format_duration(edges[i+1])}" for i in range(len(edges) - 1)]
     return {"labels": labels, "counts": counts.tolist()}
 
 
@@ -184,7 +221,8 @@ def _dku_get_summary(project_id: str, hours: int) -> dict:
 
     total = len(df)
     errors = int(df["is_error"].sum())
-    latencies = sorted(df["response_time_ms"].dropna().tolist())
+    latencies = sorted(_dku_batch_latencies_ms(df))
+    n_batches = len(latencies)
 
     def pct(data: list, p: float) -> float:
         if not data:
@@ -196,7 +234,7 @@ def _dku_get_summary(project_id: str, hours: int) -> dict:
         "total_requests": total,
         "error_count": errors,
         "error_rate": round(errors / total * 100, 2),
-        "avg_latency_ms": round(float(df["response_time_ms"].mean()), 2),
+        "avg_latency_ms": round(sum(latencies) / n_batches, 2) if n_batches else 0.0,
         "p50_latency_ms": round(pct(latencies, 50), 2),
         "p95_latency_ms": round(pct(latencies, 95), 2),
         "p99_latency_ms": round(pct(latencies, 99), 2),
@@ -210,13 +248,13 @@ def _dku_get_latency_distribution(project_id: str, hours: int) -> dict:
     since = datetime.utcnow() - timedelta(hours=hours)
     df = get_inference_logs_df(project_id, since)
     df = df[~df["is_error"]]
-    latencies = df["response_time_ms"].dropna().tolist()
+    latencies = _dku_batch_latencies_ms(df)
     if not latencies:
         return {"labels": [], "counts": []}
 
     arr = np.array(latencies)
     counts, edges = np.histogram(arr, bins=20)
-    labels = [f"{edges[i]:.0f}–{edges[i+1]:.0f}" for i in range(len(edges) - 1)]
+    labels = [f"{format_duration(edges[i])}–{format_duration(edges[i+1])}" for i in range(len(edges) - 1)]
     return {"labels": labels, "counts": counts.tolist()}
 
 

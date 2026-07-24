@@ -67,12 +67,11 @@ class ReferenceLogResponse(BaseModel):
 
 class InferenceLogCreate(BaseModel):
     project_name: str
-    batch_log_id: Optional[str] = None
+    batch_log_id: str = Field(..., min_length=1, max_length=100)
     request_id: Optional[str] = None
     model_id: Optional[str] = None
     prediction_values: float
     actual_values: Optional[float] = None
-    response_time_ms: float = Field(..., ge=0)
     is_error: bool = False
     feature_values: Optional[Dict[str, Any]] = None
     feature_dtypes: Optional[Dict[str, str]] = None
@@ -104,13 +103,12 @@ class BulkDeleteLogsRequest(BaseModel):
 class InferenceLogResponse(BaseModel):
     log_id: str
     project_id: str
-    batch_log_id: Optional[str]
+    batch_log_id: str
     request_timestamp: datetime
     request_id: Optional[str]
     model_id: Optional[str]
     prediction_values: float
     actual_values: Optional[float]
-    response_time_ms: float
     is_error: bool
 
     model_config = {"from_attributes": True}

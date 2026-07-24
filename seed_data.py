@@ -62,54 +62,76 @@ def make_logs(
     feature_distributions: dict[str, tuple],
     drift_from: int | None = None,
 ) -> list[InferenceLog]:
-    """推論ログを生成する。drift_from 以降は特徴量・予測値分布をシフトさせる。"""
+    """推論ログを生成する。drift_from 以降は特徴量・予測値分布をシフトさせる。
+
+    推論単位は batch_log_id。API 推論(1件)を多めに、時々バッチ推論(複数件)を混在
+    させる。応答時間は保存せず、updated_at = request_timestamp + レイテンシ で表現し、
+    集計側が batch_log_id 単位の時刻差から算出する。
+    """
     logs = []
     now = datetime.utcnow()
     start = now - timedelta(days=days)
 
-    for i in range(n):
-        ts = start + (now - start) * (i / n)
-        is_error = random.random() < error_rate
+    i = 0
+    batch_no = 0
+    while i < n:
+        # 6割は API 推論(1件)、残りはバッチ推論(2〜12件)
+        size = 1 if random.random() < 0.6 else random.randint(2, 12)
+        size = min(size, n - i)
+        batch_id = f"batch-{batch_no:05d}"
+        batch_no += 1
+
+        # バッチ受付時刻（バッチ内で共有）とレイテンシ
+        req_ts = start + (now - start) * (i / n)
         latency = max(1.0, random.gauss(base_latency, base_latency * 0.3))
 
-        drifted = drift_from is not None and i >= drift_from
+        for j in range(size):
+            idx = i + j
+            is_error = random.random() < error_rate
+            drifted = drift_from is not None and idx >= drift_from
 
-        # 特徴量（ドリフト時は平均をシフト）
-        fv = {}
-        for feat in feature_names:
-            dist = feature_distributions[feat]
-            shift = 1.5 if drifted else 0.0
-            if dist[0] == "normal":
-                fv[feat] = round(random.gauss(dist[1] + shift, dist[2]), 4)
-            elif dist[0] == "uniform":
-                fv[feat] = round(random.uniform(dist[1] + shift, dist[2] + shift), 4)
+            # 特徴量（ドリフト時は平均をシフト）
+            fv = {}
+            for feat in feature_names:
+                dist = feature_distributions[feat]
+                shift = 1.5 if drifted else 0.0
+                if dist[0] == "normal":
+                    fv[feat] = round(random.gauss(dist[1] + shift, dist[2]), 4)
+                elif dist[0] == "uniform":
+                    fv[feat] = round(random.uniform(dist[1] + shift, dist[2] + shift), 4)
 
-        if task_type != "regression":
-            if drifted:
-                pred = min(1.0, max(0.0, random.gauss(0.75, 0.15)))
+            if task_type != "regression":
+                if drifted:
+                    pred = min(1.0, max(0.0, random.gauss(0.75, 0.15)))
+                else:
+                    pred = min(1.0, max(0.0, random.gauss(0.45, 0.2)))
+                actual = float(random.random() < 0.5) if random.random() < 0.8 else None
             else:
-                pred = min(1.0, max(0.0, random.gauss(0.45, 0.2)))
-            actual = float(random.random() < 0.5) if random.random() < 0.8 else None
-        else:
-            if drifted:
-                pred = random.gauss(120, 15)
-            else:
-                pred = random.gauss(100, 10)
-            actual = pred + random.gauss(0, 8) if random.random() < 0.8 else None
+                if drifted:
+                    pred = random.gauss(120, 15)
+                else:
+                    pred = random.gauss(100, 10)
+                actual = pred + random.gauss(0, 8) if random.random() < 0.8 else None
 
-        logs.append(
-            InferenceLog(
-                project_id=project_id,
-                model_id=model_id,
-                request_timestamp=ts,
-                request_id=f"req-{i:06d}",
-                prediction_values=pred,
-                actual_values=actual,
-                response_time_ms=latency if not is_error else latency * 3,
-                is_error=is_error,
-                feature_values=json.dumps(fv),
+            # 応答時間は updated_at − request_timestamp から算出（エラー時は遅延）
+            resp_ms = latency if not is_error else latency * 3
+            updated = req_ts + timedelta(milliseconds=resp_ms)
+
+            logs.append(
+                InferenceLog(
+                    project_id=project_id,
+                    model_id=model_id,
+                    batch_log_id=batch_id,
+                    request_timestamp=req_ts,
+                    updated_at=updated,
+                    request_id=f"req-{idx:06d}",
+                    prediction_values=pred,
+                    actual_values=actual,
+                    is_error=is_error,
+                    feature_values=json.dumps(fv),
+                )
             )
-        )
+        i += size
     return logs
 
 
