@@ -146,14 +146,14 @@ def get_latest_accuracy(
         return {"value": None, "metric_name": metric_name, "sample_count": 0}
 
     if _is_classification(task_type):
-        correct = sum(1 for l in logs if (l.prediction_values > 0.5) == bool(l.actual_values))
+        correct = sum(1 for l in logs if (l.prediction_value > 0.5) == bool(l.actual_value))
         return {
             "value": round(correct / len(logs) * 100, 1),
             "metric_name": metric_name,
             "sample_count": len(logs),
         }
     else:
-        mae = sum(abs(l.prediction_values - l.actual_values) for l in logs) / len(logs)
+        mae = sum(abs(l.prediction_value - l.actual_value) for l in logs) / len(logs)
         return {
             "value": round(mae, 3),
             "metric_name": metric_name,
@@ -193,10 +193,10 @@ def get_accuracy_over_time(
     for day in labels:
         day_logs = daily[day]
         if _is_classification(task_type):
-            correct = sum(1 for l in day_logs if (l.prediction_values > 0.5) == bool(l.actual_values))
+            correct = sum(1 for l in day_logs if (l.prediction_value > 0.5) == bool(l.actual_value))
             values.append(round(correct / len(day_logs) * 100, 2))
         else:
-            mae = sum(abs(l.prediction_values - l.actual_values) for l in day_logs) / len(day_logs)
+            mae = sum(abs(l.prediction_value - l.actual_value) for l in day_logs) / len(day_logs)
             values.append(round(mae, 4))
 
     return {"labels": labels, "data": values, "metric_name": metric_name}

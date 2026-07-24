@@ -76,8 +76,8 @@ def detect_drift(
             "drift_detected": False,
         }
 
-    reference = np.array([l.prediction_values for l in logs[:window_size]])
-    current = np.array([l.prediction_values for l in logs[-window_size:]])
+    reference = np.array([l.prediction_value for l in logs[:window_size]])
+    current = np.array([l.prediction_value for l in logs[-window_size:]])
 
     ks_stat, ks_pvalue = stats.ks_2samp(reference, current)
     psi = _compute_psi(reference, current)

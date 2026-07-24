@@ -33,6 +33,7 @@ from .exceptions import (
     MissingDatasetError,
 )
 from .models import DeployedModel, InferenceLog, Project, ReferenceLog
+from .prediction import parse_value
 from .settings import settings
 from .logging_utils import log_call
 
@@ -243,6 +244,10 @@ def get_inference_logs_df(project_id: str, since: datetime | None = None):
     df["request_timestamp"] = _to_naive_utc(df["request_timestamp"])
     if "updated_at" in df.columns:
         df["updated_at"] = _to_naive_utc(df["updated_at"])
+    # prediction_values / actual_values (JSON {"label": 値}) は代表スカラー値に変換
+    for col in ("prediction_values", "actual_values"):
+        if col in df.columns:
+            df[col] = df[col].map(parse_value)
     if since is not None:
         df = df[df["request_timestamp"] >= since]
     if "is_error" in df.columns:

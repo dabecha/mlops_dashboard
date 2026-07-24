@@ -38,6 +38,23 @@ class ValidationError(AppError):
     default_user_message = "入力内容が正しくありません"
 
 
+class PredictionFormatError(ValidationError):
+    """予測値/正解値の {label: 値} 形式が想定と異なる（二値分類・回帰は 1 組）。"""
+
+    def __init__(self, field_name: str, task_type: str, count: int, *, log_message: str | None = None):
+        self.field_name = field_name
+        self.task_type = task_type
+        self.count = count
+        user_message = (
+            f"{field_name} は {task_type} では単一の {{ラベル: 値}} 形式である必要があります"
+            f"（検出: {count} 組）。"
+        )
+        super().__init__(
+            user_message,
+            log_message=log_message or f"{field_name} (task_type={task_type}) は {count} 組（1 組を期待）",
+        )
+
+
 class DataSourceError(AppError):
     """データソース（Dataiku 等）へのアクセスに失敗した（503）。"""
 

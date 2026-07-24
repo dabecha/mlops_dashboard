@@ -5,6 +5,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 
 from .database import Base
+from .prediction import parse_value
 
 
 def _gen_id() -> str:
@@ -92,8 +93,8 @@ class InferenceLog(Base):
     batch_log_id = Column(String(100), nullable=False, index=True)
     request_timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     model_id = Column(String(100), ForeignKey("t_deployed_models.model_id"), nullable=True, index=True)
-    prediction_values = Column(Float, nullable=False)
-    actual_values = Column(Float, nullable=True)
+    prediction_values = Column(Text, nullable=False)  # JSON: {"label": 値}（二値/回帰は1組）
+    actual_values = Column(Text, nullable=True)        # JSON: {"label": 値}（二値/回帰は1組）
     is_error = Column(Boolean, default=False)
     feature_values = Column(Text, nullable=True)    # JSON: {"age": 35.0, ...}
     feature_dtypes = Column(Text, nullable=True)    # JSON: {"age": "float32", ...}
@@ -112,3 +113,13 @@ class InferenceLog(Base):
         if self.updated_at is None or self.request_timestamp is None:
             return None
         return (self.updated_at - self.request_timestamp).total_seconds() * 1000.0
+
+    @property
+    def prediction_value(self) -> float | None:
+        """prediction_values(JSON {"label": 値}) から代表スカラー値を取り出す。"""
+        return parse_value(self.prediction_values)
+
+    @property
+    def actual_value(self) -> float | None:
+        """actual_values(JSON {"label": 値}) から代表スカラー値を取り出す。"""
+        return parse_value(self.actual_values)

@@ -69,8 +69,8 @@ class InferenceLogCreate(BaseModel):
     project_name: str
     batch_log_id: str = Field(..., min_length=1, max_length=100)
     model_id: Optional[str] = None
-    prediction_values: float
-    actual_values: Optional[float] = None
+    prediction_values: Dict[str, float]        # {"label": 値}（二値/回帰は1組）
+    actual_values: Optional[Dict[str, float]] = None
     is_error: bool = False
     feature_values: Optional[Dict[str, Any]] = None
     feature_dtypes: Optional[Dict[str, str]] = None
@@ -105,8 +105,15 @@ class InferenceLogResponse(BaseModel):
     batch_log_id: str
     request_timestamp: datetime
     model_id: Optional[str]
-    prediction_values: float
-    actual_values: Optional[float]
+    prediction_values: Dict[str, float]
+    actual_values: Optional[Dict[str, float]]
     is_error: bool
 
     model_config = {"from_attributes": True}
+
+    @field_validator("prediction_values", "actual_values", mode="before")
+    @classmethod
+    def _parse_json(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v

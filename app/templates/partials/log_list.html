@@ -56,10 +56,10 @@
             {{ log.request_timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
           </td>
           <td class="px-3 py-2.5 text-right font-mono text-xs text-white">
-            {{ "%.4f" | format(log.prediction_values) }}
+            {% if log.prediction_value is not none %}{{ "%.4f" | format(log.prediction_value) }}{% else %}—{% endif %}
           </td>
           <td class="px-3 py-2.5 text-right font-mono text-xs text-gray-400">
-            {% if log.actual_values is not none %}{{ "%.4f" | format(log.actual_values) }}{% else %}—{% endif %}
+            {% if log.actual_value is not none %}{{ "%.4f" | format(log.actual_value) }}{% else %}—{% endif %}
           </td>
           <td class="px-3 py-2.5 text-right font-mono text-xs text-gray-300">
             {{ log.response_time_ms | duration }}

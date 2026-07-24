@@ -117,8 +117,8 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
 | `batch_log_id` | VARCHAR(100) | NO | — | 推論単位の識別子。バッチ推論は複数 `log_id` が共有、API 推論は 1 件 |
 | `request_timestamp` | DATETIME | NO | 現在時刻 | 推論リクエスト受付日時（日本時間） |
 | `model_id` | VARCHAR(100) | YES | NULL | `t_deployed_models.model_id` への外部キー |
-| `prediction_values` | REAL | NO | — | モデルの予測値（分類: 確率 0–1、回帰: 数値） |
-| `actual_values` | REAL | YES | NULL | 正解ラベル（遅延ラベリングで後から投入可） |
+| `prediction_values` | TEXT | NO | — | 予測値 JSON `{"label": 値}`（二値/回帰は1組、多クラス/多ラベルは複数組） |
+| `actual_values` | TEXT | YES | NULL | 正解値 JSON `{"label": 値}`（遅延ラベリングで後から投入可） |
 | `is_error` | BOOLEAN | NO | `false` | エラー発生フラグ |
 | `feature_values` | TEXT | YES | NULL | 入力特徴量 JSON（例: `{"age": 35.0, "amount": 5200.0}`） |
 | `feature_dtypes` | TEXT | YES | NULL | 入力特徴量データ型 JSON |
@@ -214,9 +214,9 @@ Content-Type: application/json
 {
   "project_name": "fraud-detection",         # 必須
   "batch_log_id": "batch-00001",             # 必須: 推論単位の識別子（API 推論は 1 件）
-  "prediction_values": 0.82,                 # 必須: モデル出力値
+  "prediction_values": {"label": 0.82},      # 必須: {"label": 値}（二値/回帰は1組）
   "model_id": "v1.2.0",                      # 任意: t_deployed_models.model_id
-  "actual_values": 1.0,                      # 任意: 正解ラベル（遅延ラベリング対応）
+  "actual_values": {"label": 1.0},           # 任意: {"label": 値}（遅延ラベリング対応）
   "is_error": false,                         # 任意: エラーフラグ
   "request_timestamp": "2026-05-08T12:00:00", # 任意: 省略時はサーバー時刻
   "feature_values": {"age": 35.0, "amount": 5200.0},  # 任意: 入力特徴量

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..exceptions import NotFoundError, ValidationError
 from ..models import DeployedModel, InferenceLog, Project, ProjectConfig, ReferenceLog
+from ..prediction import validate_pairs
 from ..schemas import (
     BulkDeleteLogsRequest,
     DeployedModelCreate,
@@ -189,13 +190,17 @@ def log_inference(body: InferenceLogCreate, db: Session = Depends(get_db)):
     if not project:
         raise NotFoundError(f"プロジェクト '{body.project_name}' が見つかりません")
 
+    # 二値分類・回帰では prediction/actual が単一の {label: 値} であることを検証
+    validate_pairs("prediction_values", body.prediction_values, project.task_type)
+    validate_pairs("actual_values", body.actual_values, project.task_type)
+
     log = InferenceLog(
         project_id=project.project_id,
         batch_log_id=body.batch_log_id,
         request_timestamp=body.request_timestamp or datetime.utcnow(),
         model_id=body.model_id,
-        prediction_values=body.prediction_values,
-        actual_values=body.actual_values,
+        prediction_values=json.dumps(body.prediction_values),
+        actual_values=json.dumps(body.actual_values) if body.actual_values is not None else None,
         is_error=body.is_error,
         feature_values=json.dumps(body.feature_values) if body.feature_values else None,
         feature_dtypes=json.dumps(body.feature_dtypes) if body.feature_dtypes else None,

@@ -124,8 +124,9 @@ def make_logs(
                     batch_log_id=batch_id,
                     request_timestamp=req_ts,
                     updated_at=updated,
-                    prediction_values=pred,
-                    actual_values=actual,
+                    # 予測値/正解値は {"label": 値} の JSON（二値/回帰は1組）
+                    prediction_values=json.dumps({"label": round(pred, 6)}),
+                    actual_values=json.dumps({"label": round(actual, 6)}) if actual is not None else None,
                     is_error=is_error,
                     feature_values=json.dumps(fv),
                 )
