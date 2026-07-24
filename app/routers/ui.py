@@ -122,6 +122,10 @@ async def all_panels(
     if not project:
         raise NotFoundError("プロジェクトが見つかりません")
 
+    if settings.is_dataiku:
+        from ..dataiku_client import check_project_datasets
+        check_project_datasets(project_id)
+
     cfg = config_svc.get_config(db, project_id)
     summary = metrics_svc.get_summary(db, project_id, hours)
     latency = metrics_svc.get_latency_distribution(db, project_id, hours)

@@ -25,7 +25,12 @@ from datetime import datetime
 
 from sqlalchemy import String
 
-from .exceptions import ConfigurationError, DataIntegrityError, DataSourceError
+from .exceptions import (
+    ConfigurationError,
+    DataIntegrityError,
+    DataSourceError,
+    MissingDatasetError,
+)
 from .models import InferenceLog, Project
 from .settings import settings
 from .logging_utils import log_call
@@ -96,6 +101,20 @@ def _write_df(df, dataset_name: str, project_key: str | None = None) -> None:
 
 
 @log_call
+def _list_dataset_names(project_key: str) -> set[str]:
+    """指定 Dataiku プロジェクト内のデータセット名の集合を取得する。"""
+    dataiku, _ = _ensure_imports()
+    try:
+        client = dataiku.api_client()
+        project = client.get_project(project_key)
+        return {d["name"] for d in project.list_datasets()}
+    except Exception as exc:
+        raise DataSourceError(
+            log_message=f"データセット一覧の取得に失敗: project={project_key}: {exc}"
+        ) from exc
+
+
+@log_call
 def _to_naive_utc(series):
     """timezone-aware な datetime 列を UTC-naive に変換する。"""
     import pandas as pd
@@ -120,6 +139,33 @@ def _get_target_project_key(project_id: str) -> str | None:
     if row.empty:
         return None
     return str(project_id)
+
+
+@log_call
+def check_project_datasets(project_id: str) -> None:
+    """Ops プロジェクトに必須テーブルが揃っているか確認する。
+
+    t_deployed_models / t_inference_logs / t_reference_logs のいずれかが
+    存在しない場合はエラーログを出力し、MissingDatasetError を送出する
+    （どのテーブルが不足しているかをユーザー画面に表示するため）。
+    """
+    dku_project_key = _get_target_project_key(project_id)
+    if not dku_project_key:
+        return
+
+    required = [
+        settings.dku_ds_deployed_models,
+        settings.dku_ds_inference_logs,
+        settings.dku_ds_reference_logs,
+    ]
+    existing = _list_dataset_names(dku_project_key)
+    missing = [name for name in required if name not in existing]
+    if missing:
+        logger.error(
+            "プロジェクト '%s' に必須テーブルがありません: %s（Dataiku で作成が必要）",
+            dku_project_key, missing,
+        )
+        raise MissingDatasetError(missing, dku_project_key)
 
 
 # ── プロジェクト一覧（管理プロジェクトから取得） ──────────────────────────────

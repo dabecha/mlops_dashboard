@@ -55,6 +55,25 @@ class DataIntegrityError(AppError):
     default_user_message = "データの形式が正しくありません"
 
 
+class MissingDatasetError(DataSourceError):
+    """Ops プロジェクトに必須データセット（テーブル）が存在しない（作成が必要）。"""
+
+    status_code = 422
+
+    def __init__(self, missing: list[str], project_key: str, *, log_message: str | None = None):
+        self.missing = list(missing)
+        self.project_key = project_key
+        tables = "、".join(missing)
+        user_message = (
+            f"プロジェクト '{project_key}' に必要なテーブルがありません: {tables}。"
+            "Dataiku プロジェクトに該当データセットを作成してください。"
+        )
+        super().__init__(
+            user_message,
+            log_message=log_message or f"プロジェクト '{project_key}' に必須テーブルが不足: {self.missing}",
+        )
+
+
 class ConfigurationError(AppError):
     """サーバーの設定・実行環境に不備がある（500）。
 
