@@ -124,7 +124,6 @@ def make_logs(
                     batch_log_id=batch_id,
                     request_timestamp=req_ts,
                     updated_at=updated,
-                    request_id=f"req-{idx:06d}",
                     prediction_values=pred,
                     actual_values=actual,
                     is_error=is_error,

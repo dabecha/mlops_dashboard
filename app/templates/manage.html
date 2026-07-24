@@ -112,11 +112,6 @@
             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
         </div>
         <div>
-          <label class="block text-xs text-gray-400 mb-1">リクエスト ID</label>
-          <input type="text" id="log-request-id" placeholder="部分一致"
-            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-600">
-        </div>
-        <div>
           <label class="block text-xs text-gray-400 mb-1">エラーフラグ</label>
           <select id="log-is-error"
             class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
@@ -225,11 +220,9 @@
     const params = new URLSearchParams({ project_id: projectId, page: page || 1 });
     const fromDt = document.getElementById('log-from-dt').value;
     const toDt   = document.getElementById('log-to-dt').value;
-    const reqId  = document.getElementById('log-request-id').value.trim();
     const isErr  = document.getElementById('log-is-error').value;
     if (fromDt) params.set('from_dt', fromDt);
     if (toDt)   params.set('to_dt', toDt);
-    if (reqId)  params.set('request_id_filter', reqId);
     if (isErr)  params.set('is_error', isErr);
     htmx.ajax('GET', './ui/log-list?' + params.toString(), {
       target: '#log-list',

@@ -255,7 +255,6 @@ def get_inference_logs_page(
     project_id: str,
     from_dt: datetime | None = None,
     to_dt: datetime | None = None,
-    request_id_filter: str | None = None,
     is_error: bool | None = None,
     page: int = 1,
     page_size: int = 50,
@@ -273,8 +272,6 @@ def get_inference_logs_page(
         df = df[df["request_timestamp"] >= from_dt]
     if to_dt is not None:
         df = df[df["request_timestamp"] <= to_dt]
-    if request_id_filter and "request_id" in df.columns:
-        df = df[df["request_id"].fillna("").str.contains(request_id_filter, regex=False)]
     if is_error is not None and "is_error" in df.columns:
         df = df[df["is_error"] == is_error]
 

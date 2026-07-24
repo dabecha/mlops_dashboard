@@ -68,7 +68,6 @@ class ReferenceLogResponse(BaseModel):
 class InferenceLogCreate(BaseModel):
     project_name: str
     batch_log_id: str = Field(..., min_length=1, max_length=100)
-    request_id: Optional[str] = None
     model_id: Optional[str] = None
     prediction_values: float
     actual_values: Optional[float] = None
@@ -105,7 +104,6 @@ class InferenceLogResponse(BaseModel):
     project_id: str
     batch_log_id: str
     request_timestamp: datetime
-    request_id: Optional[str]
     model_id: Optional[str]
     prediction_values: float
     actual_values: Optional[float]

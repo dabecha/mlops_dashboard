@@ -37,7 +37,6 @@
           </th>
           <th class="text-left px-3 py-3 font-medium">ID</th>
           <th class="text-left px-3 py-3 font-medium">日時 (UTC)</th>
-          <th class="text-left px-3 py-3 font-medium">リクエスト ID</th>
           <th class="text-right px-3 py-3 font-medium">予測値</th>
           <th class="text-right px-3 py-3 font-medium">正解値</th>
           <th class="text-right px-3 py-3 font-medium">応答時間</th>
@@ -55,11 +54,6 @@
           <td class="px-3 py-2.5 text-gray-500 font-mono text-xs">{{ log.log_id }}</td>
           <td class="px-3 py-2.5 font-mono text-xs text-gray-300 whitespace-nowrap">
             {{ log.request_timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
-          </td>
-          <td class="px-3 py-2.5 text-xs">
-            <span class="block max-w-[160px] truncate text-gray-400" title="{{ log.request_id or '' }}">
-              {{ log.request_id or '—' }}
-            </span>
           </td>
           <td class="px-3 py-2.5 text-right font-mono text-xs text-white">
             {{ "%.4f" | format(log.prediction_values) }}

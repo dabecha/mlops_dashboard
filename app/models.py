@@ -91,7 +91,6 @@ class InferenceLog(Base):
     # 推論単位。バッチ推論は複数 log_id が同一 batch_log_id を共有、API 推論は 1 件。
     batch_log_id = Column(String(100), nullable=False, index=True)
     request_timestamp = Column(DateTime, default=datetime.utcnow, index=True)
-    request_id = Column(String(100), nullable=True)
     model_id = Column(String(100), ForeignKey("t_deployed_models.model_id"), nullable=True, index=True)
     prediction_values = Column(Float, nullable=False)
     actual_values = Column(Float, nullable=True)

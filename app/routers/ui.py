@@ -207,7 +207,6 @@ async def log_list(
     project_id: str = Query(...),
     from_dt: str | None = Query(None),
     to_dt: str | None = Query(None),
-    request_id_filter: str | None = Query(None),
     is_error: str | None = Query(None),
     page: int = Query(1),
     db: Session = Depends(get_db),
@@ -222,7 +221,6 @@ async def log_list(
             project_id,
             from_dt=parsed_from,
             to_dt=parsed_to,
-            request_id_filter=request_id_filter,
             is_error=error_filter,
             page=page,
             page_size=_LOG_PAGE_SIZE,
@@ -233,8 +231,6 @@ async def log_list(
             q = q.filter(InferenceLog.request_timestamp >= parsed_from)
         if parsed_to is not None:
             q = q.filter(InferenceLog.request_timestamp <= parsed_to)
-        if request_id_filter:
-            q = q.filter(InferenceLog.request_id.contains(request_id_filter))
         if error_filter is not None:
             q = q.filter(InferenceLog.is_error == error_filter)
 

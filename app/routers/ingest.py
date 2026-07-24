@@ -193,7 +193,6 @@ def log_inference(body: InferenceLogCreate, db: Session = Depends(get_db)):
         project_id=project.project_id,
         batch_log_id=body.batch_log_id,
         request_timestamp=body.request_timestamp or datetime.utcnow(),
-        request_id=body.request_id,
         model_id=body.model_id,
         prediction_values=body.prediction_values,
         actual_values=body.actual_values,
