@@ -43,7 +43,7 @@
           {{ p.created_at.strftime('%Y-%m-%d %H:%M') }}
         </td>
         <td class="px-4 py-3 text-right">
-          <button onclick="deleteProject({{ p.project_id }}, '{{ p.project_name }}')"
+          <button onclick="deleteProject('{{ p.project_id }}', '{{ p.project_name }}')"
             class="text-red-600 hover:text-red-400 transition-colors p-1" title="削除">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
