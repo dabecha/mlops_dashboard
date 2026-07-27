@@ -109,6 +109,14 @@ async def summary_panels(
                 db, p.project_id, hours=hours, task_type=p.task_type,
                 metric_name=cfg["metric_name"], threshold=cfg["classification_threshold"],
             )
+            # ターゲットドリフト（実績値）を最重要指標として先に計算
+            target_drift = drift_svc.detect_target_drift(
+                db, p.project_id,
+                window_size=cfg["drift_window_size"],
+                psi_warning=cfg["psi_warning"],
+                psi_alert=cfg["psi_alert"],
+                ks_alpha=cfg["ks_alpha"],
+            )
             drift = drift_svc.detect_drift(
                 db, p.project_id,
                 window_size=cfg["drift_window_size"],
@@ -118,7 +126,8 @@ async def summary_panels(
             )
             rows.append({
                 "project": p, "summary": summary, "accuracy": accuracy,
-                "drift": drift, "config": cfg, "error": None,
+                "target_drift": target_drift, "drift": drift,
+                "config": cfg, "error": None,
             })
         except AppError as exc:
             logger.warning("サマリー: プロジェクト %s の取得に失敗: %s", p.project_id, exc.log_message)
@@ -157,6 +166,14 @@ async def all_panels(
         db, project_id, hours, project.task_type,
         metric_name=cfg["metric_name"], threshold=cfg["classification_threshold"],
     )
+    # ターゲットドリフト（実績値）を最重要指標として先に計算
+    target_drift = drift_svc.detect_target_drift(
+        db, project_id,
+        window_size=cfg["drift_window_size"],
+        psi_warning=cfg["psi_warning"],
+        psi_alert=cfg["psi_alert"],
+        ks_alpha=cfg["ks_alpha"],
+    )
     drift = drift_svc.detect_drift(
         db, project_id,
         window_size=cfg["drift_window_size"],
@@ -184,6 +201,7 @@ async def all_panels(
             "summary": summary,
             "latency": latency,
             "accuracy": accuracy,
+            "target_drift": target_drift,
             "drift": drift,
             "drift_trend": drift_trend,
             "feature_drift": feature_drift,

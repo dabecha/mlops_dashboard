@@ -23,14 +23,28 @@ except ImportError:
     pass
 
 
+def _sample_actual(dist: tuple) -> float:
+    """学習時の正解ラベルを分布定義からサンプリングする。
+
+    ("binary", 陽性率) → 0/1、("normal", 平均, 標準偏差) → 連続値。
+    """
+    if dist[0] == "binary":
+        return float(random.random() < dist[1])
+    return round(random.gauss(dist[1], dist[2]), 6)
+
+
 def make_reference_log_samples(
     project_id: str,
     model_id: str,
     feature_names: list[str],
     n_samples: int,
     feature_distributions: dict[str, tuple],
+    actual_distribution: tuple,
 ) -> list[ReferenceLog]:
-    """学習データのサンプルを t_reference_logs に登録する。"""
+    """学習データのサンプルを t_reference_logs に登録する。
+
+    actual_values（学習時の正解ラベル）はターゲットドリフトの参照分布として使用する。
+    """
     records = []
     for _ in range(n_samples):
         fv = {}
@@ -45,6 +59,7 @@ def make_reference_log_samples(
                 project_id=project_id,
                 model_id=model_id,
                 feature_values=json.dumps(fv),
+                actual_values=_sample_actual(actual_distribution),
             )
         )
     return records
@@ -105,7 +120,9 @@ def make_logs(
                     pred = min(1.0, max(0.0, random.gauss(0.75, 0.15)))
                 else:
                     pred = min(1.0, max(0.0, random.gauss(0.45, 0.2)))
-                actual = float(random.random() < 0.5) if random.random() < 0.8 else None
+                # ドリフト期間は実績の陽性率も上昇させる（ターゲットドリフトのデモ）
+                pos_rate = 0.8 if drifted else 0.5
+                actual = float(random.random() < pos_rate) if random.random() < 0.8 else None
             else:
                 if drifted:
                     pred = random.gauss(120, 15)
@@ -172,6 +189,7 @@ def main() -> None:
                     "transaction_count": ("normal", 5.0, 2.0),
                     "distance_from_home": ("uniform", 0.0, 50.0),
                 },
+                "ref_actual_dist": ("binary", 0.5),  # 学習時の陽性率
                 "n_ref_samples": 200,
             },
             {
@@ -197,6 +215,7 @@ def main() -> None:
                     "age_years": ("normal", 20.0, 15.0),
                     "distance_station": ("normal", 10.0, 5.0),
                 },
+                "ref_actual_dist": ("normal", 100.0, 13.0),  # 学習時の目的変数分布（運用時の実績と同等）
                 "n_ref_samples": 150,
             },
             {
@@ -222,6 +241,7 @@ def main() -> None:
                     "num_products": ("uniform", 1.0, 5.0),
                     "support_calls": ("normal", 2.0, 1.5),
                 },
+                "ref_actual_dist": ("binary", 0.5),  # 学習時の陽性率
                 "n_ref_samples": 120,
             },
         ]
@@ -237,6 +257,7 @@ def main() -> None:
             feature_importance = pdef.pop("feature_importance")
             feature_dtypes = pdef.pop("feature_dtypes")
             feature_distributions = pdef.pop("feature_distributions")
+            ref_actual_dist = pdef.pop("ref_actual_dist")
             n_ref_samples = pdef.pop("n_ref_samples")
             metric_name = pdef.pop("metric_name")
             metric_warning = pdef.pop("metric_warning")
@@ -275,6 +296,7 @@ def main() -> None:
                 feature_names=feature_names,
                 n_samples=n_ref_samples,
                 feature_distributions=feature_distributions,
+                actual_distribution=ref_actual_dist,
             )
             db.bulk_save_objects(ref_records)
 

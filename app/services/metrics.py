@@ -69,6 +69,8 @@ def get_summary(db: Session, project_id: str, hours: int = 24) -> dict:
         "total_requests": 0,
         "error_count": 0,
         "error_rate": 0.0,
+        "actual_count": 0,
+        "actual_rate": 0.0,
         "avg_latency_ms": 0.0,
         "p50_latency_ms": 0.0,
         "p95_latency_ms": 0.0,
@@ -79,6 +81,8 @@ def get_summary(db: Session, project_id: str, hours: int = 24) -> dict:
 
     total = len(logs)
     errors = sum(1 for l in logs if l.is_error)
+    # 実績値（actual_values）が連携済みの予測件数（遅延ラベリングの進捗把握用）
+    actuals = sum(1 for l in logs if l.actual_values is not None)
     latencies = sorted(_batch_latencies_ms(
         (l.batch_log_id, l.request_timestamp, l.updated_at) for l in logs
     ))
@@ -92,6 +96,8 @@ def get_summary(db: Session, project_id: str, hours: int = 24) -> dict:
         "total_requests": total,
         "error_count": errors,
         "error_rate": round(errors / total * 100, 2),
+        "actual_count": actuals,
+        "actual_rate": round(actuals / total * 100, 1),
         "avg_latency_ms": round(sum(latencies) / n_batches, 2) if n_batches else 0.0,
         "p50_latency_ms": round(pct(latencies, 50), 2) if n_batches else 0.0,
         "p95_latency_ms": round(pct(latencies, 95), 2) if n_batches else 0.0,
@@ -206,6 +212,7 @@ def _dku_get_summary(project_id: str, hours: int) -> dict:
 
     empty = {
         "total_requests": 0, "error_count": 0, "error_rate": 0.0,
+        "actual_count": 0, "actual_rate": 0.0,
         "avg_latency_ms": 0.0, "p50_latency_ms": 0.0,
         "p95_latency_ms": 0.0, "p99_latency_ms": 0.0,
     }
@@ -214,6 +221,8 @@ def _dku_get_summary(project_id: str, hours: int) -> dict:
 
     total = len(df)
     errors = int(df["is_error"].sum())
+    # 実績値（actual_values）が連携済みの予測件数（遅延ラベリングの進捗把握用）
+    actuals = int(df["actual_values"].notna().sum())
     latencies = sorted(_dku_batch_latencies_ms(df))
     n_batches = len(latencies)
 
@@ -227,6 +236,8 @@ def _dku_get_summary(project_id: str, hours: int) -> dict:
         "total_requests": total,
         "error_count": errors,
         "error_rate": round(errors / total * 100, 2),
+        "actual_count": actuals,
+        "actual_rate": round(actuals / total * 100, 1),
         "avg_latency_ms": round(sum(latencies) / n_batches, 2) if n_batches else 0.0,
         "p50_latency_ms": round(pct(latencies, 50), 2),
         "p95_latency_ms": round(pct(latencies, 95), 2),

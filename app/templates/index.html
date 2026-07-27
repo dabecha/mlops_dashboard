@@ -11,11 +11,15 @@
   onchange="loadPanels()">
   {% for p in projects %}
   <option value="{{ p.project_id }}" {% if p.project_id == initial_project_id %}selected{% endif %}>
+    {% if p.description %}
+    {{ p.description }}
+    {% else %}
     {{ p.project_name }}
     {% if p.task_type == 'binary' %} (二値分類)
     {% elif p.task_type == 'multi-class' %} (多クラス分類)
     {% elif p.task_type == 'multi-label' %} (多ラベル分類)
     {% else %} (回帰)
+    {% endif %}
     {% endif %}
   </option>
   {% endfor %}

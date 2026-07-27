@@ -25,8 +25,12 @@ def _loads(raw: str):
 
 @log_call
 def _compute_psi(expected: np.ndarray, actual: np.ndarray, bins: int = 10) -> float:
-    """Population Stability Index を計算する。"""
-    eps = 1e-6
+    """Population Stability Index を計算する。
+
+    空ビンがあると log 比が発散して PSI が過大評価されるため、
+    各ビンに擬似カウント 0.5 を加える（Laplace 平滑化）。
+    """
+    pseudo = 0.5
     lo = min(expected.min(), actual.min())
     hi = max(expected.max(), actual.max())
     if lo == hi:
@@ -36,10 +40,151 @@ def _compute_psi(expected: np.ndarray, actual: np.ndarray, bins: int = 10) -> fl
     exp_counts, _ = np.histogram(expected, bins=edges)
     act_counts, _ = np.histogram(actual, bins=edges)
 
-    exp_pct = (exp_counts + eps) / (len(expected) + eps * bins)
-    act_pct = (act_counts + eps) / (len(actual) + eps * bins)
+    exp_pct = (exp_counts + pseudo) / (len(expected) + pseudo * bins)
+    act_pct = (act_counts + pseudo) / (len(actual) + pseudo * bins)
 
     return float(np.sum((act_pct - exp_pct) * np.log(act_pct / exp_pct)))
+
+
+@log_call
+def _two_sample_drift_result(
+    reference: np.ndarray,
+    current: np.ndarray,
+    psi_warning: float,
+    psi_alert: float,
+    ks_alpha: float,
+) -> dict:
+    """2 標本の PSI + KS 検定によるドリフト判定結果を組み立てる。"""
+    ks_stat, ks_pvalue = stats.ks_2samp(reference, current)
+    psi = _compute_psi(reference, current)
+
+    psi_level = "ok" if psi < psi_warning else ("warning" if psi < psi_alert else "alert")
+    drift_by_ks = bool(ks_pvalue < ks_alpha)
+    drift_detected = drift_by_ks or psi_level == "alert"
+
+    return {
+        "status": "ok",
+        "ks_statistic": round(float(ks_stat), 4),
+        "ks_pvalue": round(float(ks_pvalue), 4),
+        "psi": round(psi, 4),
+        "psi_level": psi_level,
+        "drift_by_ks": drift_by_ks,
+        "drift_detected": drift_detected,
+        "reference_count": len(reference),
+        "current_count": len(current),
+        "psi_warning": psi_warning,
+        "psi_alert": psi_alert,
+        "ks_alpha": ks_alpha,
+        "message": _build_message(drift_detected, psi_level, psi_warning, psi_alert, float(ks_pvalue), ks_alpha),
+    }
+
+
+def _target_drift_unavailable(status: str, message: str) -> dict:
+    """ターゲットドリフトが判定不能な場合の結果を組み立てる。"""
+    return {
+        "status": status,
+        "message": message,
+        "ks_statistic": None,
+        "ks_pvalue": None,
+        "psi": None,
+        "psi_level": None,
+        "drift_detected": False,
+    }
+
+
+# ── ターゲットドリフト（実績値。ドリフト監視の最重要指標） ────────────────────
+
+@log_call
+def detect_target_drift(
+    db: Session,
+    project_id: str,
+    window_size: int = 100,
+    psi_warning: float = 0.10,
+    psi_alert: float = 0.25,
+    ks_alpha: float = 0.05,
+) -> dict:
+    """ターゲットドリフト（実績値の分布変化）を検知する。
+
+    参照 = 学習時の正解ラベル（t_reference_logs.actual_values）、
+    現在 = 実績値が連携済みの直近 window_size 件（t_inference_logs.actual_values）。
+    実績値の分布変化はモデル性能の悪化に直結するため、ドリフト監視の
+    最重要指標として扱う。
+    """
+    if settings.is_dataiku:
+        return _dku_detect_target_drift(project_id, window_size, psi_warning, psi_alert, ks_alpha)
+
+    ref_rows = (
+        db.query(ReferenceLog.actual_values)
+        .filter(
+            ReferenceLog.project_id == project_id,
+            ReferenceLog.actual_values != None,  # noqa: E711
+        )
+        .limit(window_size)
+        .all()
+    )
+    reference = np.array([r[0] for r in ref_rows], dtype=float)
+    if reference.size == 0:
+        return _target_drift_unavailable(
+            "no_reference_actuals",
+            "学習データの正解ラベル（参照ログの actual_values）が登録されていません",
+        )
+
+    cur_logs = (
+        db.query(InferenceLog)
+        .filter(
+            InferenceLog.project_id == project_id,
+            InferenceLog.is_error == False,  # noqa: E712
+            InferenceLog.actual_values != None,  # noqa: E711
+        )
+        .order_by(InferenceLog.request_timestamp.desc())
+        .limit(window_size)
+        .all()
+    )
+    current = np.array([l.actual_value for l in cur_logs], dtype=float)
+    if current.size < window_size:
+        return _target_drift_unavailable(
+            "insufficient_data",
+            f"ターゲットドリフト検知には実績値連携済みのログが {window_size} 件必要です（現在: {current.size} 件）",
+        )
+
+    return _two_sample_drift_result(reference, current, psi_warning, psi_alert, ks_alpha)
+
+
+@log_call
+def _dku_detect_target_drift(
+    project_id: str,
+    window_size: int,
+    psi_warning: float,
+    psi_alert: float,
+    ks_alpha: float,
+) -> dict:
+    from ..dataiku_client import get_inference_logs_df, get_reference_logs_df
+
+    ref_df = get_reference_logs_df(project_id)
+    if not ref_df.empty:
+        ref_df = ref_df[ref_df["actual_values"].notna()].head(window_size)
+    if ref_df.empty:
+        return _target_drift_unavailable(
+            "no_reference_actuals",
+            "学習データの正解ラベル（参照ログの actual_values）が登録されていません",
+        )
+    reference = ref_df["actual_values"].to_numpy(dtype=float)
+
+    logs_df = get_inference_logs_df(project_id)
+    if not logs_df.empty:
+        logs_df = (
+            logs_df[~logs_df["is_error"] & logs_df["actual_values"].notna()]
+            .sort_values("request_timestamp", ascending=False)
+            .head(window_size)
+        )
+    if len(logs_df) < window_size:
+        return _target_drift_unavailable(
+            "insufficient_data",
+            f"ターゲットドリフト検知には実績値連携済みのログが {window_size} 件必要です（現在: {len(logs_df)} 件）",
+        )
+    current = logs_df["actual_values"].to_numpy(dtype=float)
+
+    return _two_sample_drift_result(reference, current, psi_warning, psi_alert, ks_alpha)
 
 
 # ── 予測値ドリフト ────────────────────────────────────────────────────────────
@@ -80,28 +225,7 @@ def detect_drift(
     reference = np.array([l.prediction_value for l in logs[:window_size]])
     current = np.array([l.prediction_value for l in logs[-window_size:]])
 
-    ks_stat, ks_pvalue = stats.ks_2samp(reference, current)
-    psi = _compute_psi(reference, current)
-
-    psi_level = "ok" if psi < psi_warning else ("warning" if psi < psi_alert else "alert")
-    drift_by_ks = ks_pvalue < ks_alpha
-    drift_detected = drift_by_ks or psi_level == "alert"
-
-    return {
-        "status": "ok",
-        "ks_statistic": round(ks_stat, 4),
-        "ks_pvalue": round(ks_pvalue, 4),
-        "psi": round(psi, 4),
-        "psi_level": psi_level,
-        "drift_by_ks": drift_by_ks,
-        "drift_detected": drift_detected,
-        "reference_count": window_size,
-        "current_count": window_size,
-        "psi_warning": psi_warning,
-        "psi_alert": psi_alert,
-        "ks_alpha": ks_alpha,
-        "message": _build_message(drift_detected, psi_level, psi_warning, psi_alert, ks_pvalue, ks_alpha),
-    }
+    return _two_sample_drift_result(reference, current, psi_warning, psi_alert, ks_alpha)
 
 
 # ── 予測値ドリフト PSI 推移 ──────────────────────────────────────────────────
@@ -292,28 +416,7 @@ def _dku_detect_drift(
     reference = df["prediction_values"].iloc[:window_size].to_numpy(dtype=float)
     current = df["prediction_values"].iloc[-window_size:].to_numpy(dtype=float)
 
-    ks_stat, ks_pvalue = stats.ks_2samp(reference, current)
-    psi = _compute_psi(reference, current)
-
-    psi_level = "ok" if psi < psi_warning else ("warning" if psi < psi_alert else "alert")
-    drift_by_ks = bool(ks_pvalue < ks_alpha)
-    drift_detected = drift_by_ks or psi_level == "alert"
-
-    return {
-        "status": "ok",
-        "ks_statistic": round(float(ks_stat), 4),
-        "ks_pvalue": round(float(ks_pvalue), 4),
-        "psi": round(psi, 4),
-        "psi_level": psi_level,
-        "drift_by_ks": drift_by_ks,
-        "drift_detected": drift_detected,
-        "reference_count": window_size,
-        "current_count": window_size,
-        "psi_warning": psi_warning,
-        "psi_alert": psi_alert,
-        "ks_alpha": ks_alpha,
-        "message": _build_message(drift_detected, psi_level, psi_warning, psi_alert, float(ks_pvalue), ks_alpha),
-    }
+    return _two_sample_drift_result(reference, current, psi_warning, psi_alert, ks_alpha)
 
 
 @log_call

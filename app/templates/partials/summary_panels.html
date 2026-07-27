@@ -5,9 +5,10 @@
 <!-- ステータスバー（アラートのみ強調） -->
 {% set ok_rows = rows | rejectattr('error') | list %}
 {% set problem_rows = rows | selectattr('error') | list %}
+{% set target_alert_count = ok_rows | selectattr('target_drift.drift_detected') | list | length %}
 {% set alert_count = ok_rows | selectattr('drift.drift_detected') | list | length %}
 {% set error_projects = ok_rows | selectattr('summary.error_rate', '>', 5) | list %}
-{% if alert_count > 0 or error_projects or problem_rows %}
+{% if target_alert_count > 0 or alert_count > 0 or error_projects or problem_rows %}
 <div class="mb-6 flex flex-wrap gap-3">
   {% if problem_rows %}
   <div class="flex items-center gap-2 bg-red-950 border border-red-800 rounded-lg px-4 py-2 text-sm text-red-300">
@@ -18,13 +19,22 @@
     <span>{{ problem_rows | length }} プロジェクトで不具合を検出</span>
   </div>
   {% endif %}
+  {% if target_alert_count > 0 %}
+  <div class="flex items-center gap-2 bg-red-950 border border-red-700 rounded-lg px-4 py-2 text-sm text-red-200 font-semibold">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+    </svg>
+    <span>{{ target_alert_count }} プロジェクトでターゲットドリフトを検出</span>
+  </div>
+  {% endif %}
   {% if alert_count > 0 %}
   <div class="flex items-center gap-2 bg-red-950 border border-red-800 rounded-lg px-4 py-2 text-sm text-red-300">
     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
         d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
     </svg>
-    <span>{{ alert_count }} プロジェクトでドリフトを検出</span>
+    <span>{{ alert_count }} プロジェクトで予測値ドリフトを検出</span>
   </div>
   {% endif %}
   {% for r in error_projects %}
@@ -32,7 +42,7 @@
     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
     </svg>
-    <span>{{ r.project.project_name }}: エラー率 {{ r.summary.error_rate }}%（閾値 5% 超過）</span>
+    <span>{{ r.project.description or r.project.project_name }}: エラー率 {{ r.summary.error_rate }}%（閾値 5% 超過）</span>
   </div>
   {% endfor %}
 </div>
@@ -45,11 +55,11 @@
       <tr class="border-b border-gray-800 text-xs text-gray-500 uppercase tracking-wider">
         <th class="text-left px-5 py-3 font-medium">プロジェクト</th>
         <th class="text-left px-4 py-3 font-medium">種別</th>
-        <th class="text-right px-4 py-3 font-medium">リクエスト数</th>
+        <th class="text-right px-4 py-3 font-medium">予測件数<br><span class="text-gray-600 normal-case">実績値連携</span></th>
         <th class="text-right px-4 py-3 font-medium">エラー率</th>
         <th class="text-right px-4 py-3 font-medium">応答時間<br><span class="text-gray-600 normal-case">Avg / P95</span></th>
         <th class="text-right px-4 py-3 font-medium">精度<br><span class="text-gray-600 normal-case">{{ period_label(hours) }}</span></th>
-        <th class="text-center px-4 py-3 font-medium">ドリフト</th>
+        <th class="text-center px-4 py-3 font-medium">ドリフト<br><span class="text-gray-600 normal-case">ターゲット / 予測値</span></th>
         <th class="text-center px-4 py-3 font-medium w-16"></th>
       </tr>
     </thead>
@@ -59,9 +69,9 @@
       {% set ep = row.project %}
       <tr class="border-l-2 border-red-500 bg-red-950/20">
         <td class="px-5 py-4">
-          <div class="font-semibold text-white">{{ ep.project_name }}</div>
+          <div class="font-semibold text-white truncate max-w-xs" title="{{ ep.description or ep.project_name }}">{{ ep.description or ep.project_name }}</div>
           {% if ep.description %}
-          <div class="text-xs text-gray-500 mt-0.5 truncate max-w-xs">{{ ep.description }}</div>
+          <div class="text-xs text-gray-500 mt-0.5">{{ ep.project_name }}</div>
           {% endif %}
         </td>
         <td class="px-4 py-4">
@@ -93,17 +103,18 @@
       {% set p = row.project %}
       {% set s = row.summary %}
       {% set a = row.accuracy %}
+      {% set td = row.target_drift %}
       {% set d = row.drift %}
       {% set is_error_alert = s.error_rate > 5 %}
-      {% set is_drift_alert = d.drift_detected %}
+      {% set is_drift_alert = td.drift_detected or d.drift_detected %}
       <tr class="hover:bg-gray-800/50 transition-colors
         {% if is_drift_alert or is_error_alert %}border-l-2 {% if is_drift_alert %}border-red-500{% else %}border-orange-500{% endif %}{% endif %}">
 
-        <!-- プロジェクト名 -->
+        <!-- プロジェクト名（説明文をメイン表示、プロジェクト名/ID を補記） -->
         <td class="px-5 py-4">
-          <div class="font-semibold text-white">{{ p.project_name }}</div>
+          <div class="font-semibold text-white truncate max-w-xs" title="{{ p.description or p.project_name }}">{{ p.description or p.project_name }}</div>
           {% if p.description %}
-          <div class="text-xs text-gray-500 mt-0.5 truncate max-w-xs">{{ p.description }}</div>
+          <div class="text-xs text-gray-500 mt-0.5">{{ p.project_name }}</div>
           {% endif %}
         </td>
 
@@ -120,10 +131,14 @@
           {% endif %}
         </td>
 
-        <!-- リクエスト数 -->
+        <!-- 予測件数 -->
         <td class="px-4 py-4 text-right">
           <span class="text-white font-mono">{{ "{:,}".format(s.total_requests) }}</span>
-          {% if s.total_requests == 0 %}
+          {% if s.total_requests > 0 %}
+          <div class="text-xs text-gray-600" title="actual_values（実績値）が連携済みの予測件数（遅延ラベリングの進捗）">
+            実績値連携 {{ "{:,}".format(s.actual_count) }} 件 ({{ s.actual_rate }}%)
+          </div>
+          {% else %}
           <div class="text-xs text-gray-600">データなし</div>
           {% endif %}
         </td>
@@ -167,32 +182,42 @@
           {% endif %}
         </td>
 
-        <!-- ドリフト -->
+        <!-- ドリフト（ターゲットを主表示、予測値を補記） -->
         <td class="px-4 py-4 text-center">
-          {% if d.status == 'insufficient_data' %}
-          <span class="inline-flex items-center gap-1 text-xs text-gray-500">
+          {% if td.status != 'ok' %}
+          <span class="inline-flex items-center gap-1 text-xs text-gray-500"
+            title="{{ td.message }}">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            データ不足
+            ターゲット: {% if td.status == 'no_reference_actuals' %}参照なし{% else %}データ不足{% endif %}
           </span>
-          {% elif d.drift_detected %}
+          {% elif td.drift_detected %}
           <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-900/60 text-red-300 border border-red-700">
             <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
             </svg>
-            検出
+            ターゲット検出
           </span>
-          <div class="text-xs text-gray-600 mt-1">PSI {{ d.psi }}</div>
+          <div class="text-xs text-gray-600 mt-1">PSI {{ td.psi }}</div>
           {% else %}
           <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-900/60 text-emerald-300 border border-emerald-700">
             <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
             </svg>
-            正常
+            ターゲット正常
           </span>
-          <div class="text-xs text-gray-600 mt-1">PSI {{ d.psi }}</div>
+          <div class="text-xs text-gray-600 mt-1">PSI {{ td.psi }}</div>
           {% endif %}
+          <div class="text-xs mt-1.5">
+            {% if d.status == 'insufficient_data' %}
+            <span class="text-gray-600">予測値: データ不足</span>
+            {% elif d.drift_detected %}
+            <span class="text-red-400">予測値: 検出（PSI {{ d.psi }}）</span>
+            {% else %}
+            <span class="text-gray-600">予測値: 正常（PSI {{ d.psi }}）</span>
+            {% endif %}
+          </div>
         </td>
 
         <!-- 詳細 / 設定 -->

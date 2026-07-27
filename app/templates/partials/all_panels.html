@@ -1,10 +1,14 @@
 <!-- ===== サマリーカード ===== -->
 <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
 
-  <!-- 総リクエスト数 -->
+  <!-- 総予測件数 -->
   <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-    <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">総リクエスト数</p>
+    <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">総予測件数</p>
     <p class="text-3xl font-bold text-white">{{ "{:,}".format(summary.total_requests) }}</p>
+    <p class="text-xs text-gray-400 mt-1" title="actual_values（実績値）が連携済みの予測件数（遅延ラベリングの進捗）">
+      実績値連携 {{ "{:,}".format(summary.actual_count) }} 件
+      {% if summary.total_requests > 0 %}<span class="text-gray-600">({{ summary.actual_rate }}%)</span>{% endif %}
+    </p>
     <p class="text-xs text-gray-500 mt-1">直近 {{ hours }}h</p>
   </div>
 
@@ -92,6 +96,94 @@
     {% endif %}
   </div>
 
+</div>
+
+<!-- ===== ターゲットドリフト検知（最重要） ===== -->
+<div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
+  <h2 class="text-sm font-semibold text-gray-300 mb-1 flex items-center gap-2">
+    ターゲットドリフト検知（学習時の正解ラベル vs 運用の実績値）
+    <span class="px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-900 text-indigo-300">最重要</span>
+  </h2>
+  <p class="text-xs text-gray-600 mb-4">
+    実績値の分布変化はモデル性能の悪化に直結する最優先の監視指標です。判定は学習データの正解ラベル vs 実績値連携済みの直近 {{ config.drift_window_size }} 件で、期間選択とは独立です
+  </p>
+
+  {% if target_drift.status != "ok" %}
+  <div class="flex items-center gap-3 text-yellow-400 text-sm">
+    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+        d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+    </svg>
+    {{ target_drift.message }}
+  </div>
+
+  {% else %}
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+    <!-- 総合判定 -->
+    <div class="flex flex-col items-center justify-center p-4 rounded-lg
+      {% if target_drift.drift_detected %}bg-red-950 border border-red-800{% else %}bg-emerald-950 border border-emerald-800{% endif %}">
+      {% if target_drift.drift_detected %}
+      <svg class="w-10 h-10 text-red-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+      </svg>
+      <p class="font-bold text-red-400">ターゲットドリフト検出</p>
+      {% else %}
+      <svg class="w-10 h-10 text-emerald-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+      </svg>
+      <p class="font-bold text-emerald-400">正常</p>
+      {% endif %}
+      <p class="text-xs text-gray-500 mt-1 text-center">{{ target_drift.message }}</p>
+    </div>
+
+    <!-- PSI -->
+    <div class="bg-gray-800 rounded-lg p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">PSI（Population Stability Index）</p>
+      <p class="text-2xl font-bold font-mono
+        {% if target_drift.psi_level == 'ok' %}text-emerald-400
+        {% elif target_drift.psi_level == 'warning' %}text-yellow-400
+        {% else %}text-red-400{% endif %}">
+        {{ target_drift.psi }}
+      </p>
+      <div class="mt-2 flex gap-2 text-xs">
+        <span class="{% if target_drift.psi_level == 'ok' %}text-emerald-400 font-semibold{% else %}text-gray-600{% endif %}">&lt; {{ target_drift.psi_warning }} 正常</span>
+        <span class="{% if target_drift.psi_level == 'warning' %}text-yellow-400 font-semibold{% else %}text-gray-600{% endif %}">{{ target_drift.psi_warning }}–{{ target_drift.psi_alert }} 警告</span>
+        <span class="{% if target_drift.psi_level == 'alert' %}text-red-400 font-semibold{% else %}text-gray-600{% endif %}">&gt; {{ target_drift.psi_alert }} 異常</span>
+      </div>
+    </div>
+
+    <!-- KS 検定 -->
+    <div class="bg-gray-800 rounded-lg p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">KS 検定（Kolmogorov-Smirnov）</p>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <span class="text-gray-400">統計量</span>
+          <span class="font-mono text-white">{{ target_drift.ks_statistic }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-400">p 値</span>
+          <span class="font-mono {% if target_drift.drift_by_ks %}text-red-400{% else %}text-emerald-400{% endif %}">
+            {{ target_drift.ks_pvalue }}
+          </span>
+        </div>
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-600">有意水準</span>
+          <span class="text-gray-600">α = {{ target_drift.ks_alpha }}</span>
+        </div>
+      </div>
+      <p class="text-xs mt-3 {% if target_drift.drift_by_ks %}text-red-400{% else %}text-emerald-400{% endif %}">
+        {% if target_drift.drift_by_ks %}有意差あり（ドリフト検出）{% else %}有意差なし（正常）{% endif %}
+      </p>
+    </div>
+
+  </div>
+
+  <p class="text-xs text-gray-600 mt-3">
+    参照: 学習データの正解ラベル {{ target_drift.reference_count }} 件　/　現在: 実績値連携済みの最新 {{ target_drift.current_count }} 件
+  </p>
+  {% endif %}
 </div>
 
 <!-- ===== 予測値ドリフト検知 ===== -->
