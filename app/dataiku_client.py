@@ -19,6 +19,7 @@ dataiku パッケージは DSS 環境内でのみ利用可能なため、遅延�
 """
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 from datetime import datetime
@@ -38,6 +39,62 @@ from .settings import settings
 from .logging_utils import log_call
 
 logger = logging.getLogger(__name__)
+
+
+# ── 内部: エラーメッセージ組み立て ───────────────────────────────────────────
+
+_LOW_LEVEL_HELPERS = {
+    "_calling_function", "_source_error_message",
+    "_fetch_df", "_write_df", "_list_dataset_names",
+}
+
+
+def _calling_function() -> str:
+    """低レベルヘルパー（_fetch_df 等）に至る本モジュール内の呼び出し連鎖を返す。
+
+    例: "get_inference_logs_df > _get_target_project_key"（外側から順、最大 3 段）。
+    log_call デコレータの wrapper（logging_utils.py）は別ファイルのため除外される。
+    特定できない場合は "(不明)" を返す。
+    """
+    names = []
+    for frame_info in inspect.stack()[1:]:
+        if frame_info.filename != __file__:
+            continue
+        if frame_info.function in _LOW_LEVEL_HELPERS:
+            continue
+        names.append(frame_info.function)
+    if not names:
+        return "(不明)"
+    return " > ".join(reversed(names[:3]))
+
+
+def _describe_cause(exc: Exception) -> str:
+    """例外メッセージから推定される原因のヒントを返す（該当なしは空文字）。"""
+    msg = str(exc).lower()
+    if any(k in msg for k in ("does not exist", "not exist", "not found", "no such", "unknown dataset")):
+        return "データセット未作成、またはデータセット名 / project_key の誤りの可能性"
+    if any(k in msg for k in ("unauthorized", "forbidden", "permission", "access denied", "401", "403")):
+        return "Dataiku API キーの権限不足、または認証失敗の可能性（DATAIKU_API_KEY を確認）"
+    if any(k in msg for k in ("connection", "timed out", "timeout", "refused", "unreachable", "getaddrinfo", "name resolution")):
+        return "DSS への接続失敗の可能性（DATAIKU_HOST / ネットワーク設定を確認）"
+    if any(k in msg for k in ("schema", "column", "dtype", "cast")):
+        return "データセットのスキーマ（カラム定義・型）不整合の可能性"
+    return ""
+
+
+def _source_error_message(operation: str, exc: Exception, **context) -> str:
+    """DataSourceError 用の log_message を組み立てる。
+
+    どの関数からの操作か（呼び出し元）、対象（dataset / project_key）、
+    元例外の型・内容、推定原因を 1 行にまとめる。
+    """
+    caller = _calling_function()
+    ctx = ", ".join(f"{k}={v if v not in (None, '') else '(未指定)'}" for k, v in context.items())
+    msg = f"{caller}: {operation}に失敗 ({ctx}) | 例外: {type(exc).__name__}: {exc}"
+    hint = _describe_cause(exc)
+    if hint:
+        msg += f" | 推定原因: {hint}"
+    return msg
 
 
 # ── 内部: DataFrame 取得 ─────────────────────────────────────────────────────
@@ -78,7 +135,10 @@ def _fetch_df(dataset_name: str, project_key: str | None = None):
         return ds.get_dataframe()
     except Exception as exc:
         raise DataSourceError(
-            log_message=f"データセット取得に失敗: dataset={dataset_name}, project_key={effective_key}: {exc}"
+            log_message=_source_error_message(
+                "データセット取得", exc,
+                dataset=dataset_name, project_key=effective_key,
+            )
         ) from exc
 
 
@@ -98,7 +158,10 @@ def _write_df(df, dataset_name: str, project_key: str | None = None) -> None:
         ds.write_with_schema(df)
     except Exception as exc:
         raise DataSourceError(
-            log_message=f"データセット書き込みに失敗: dataset={dataset_name}, project_key={effective_key}: {exc}"
+            log_message=_source_error_message(
+                "データセット書き込み", exc,
+                dataset=dataset_name, project_key=effective_key,
+            )
         ) from exc
 
 
@@ -112,7 +175,10 @@ def _list_dataset_names(project_key: str) -> set[str]:
         return {d["name"] for d in project.list_datasets()}
     except Exception as exc:
         raise DataSourceError(
-            log_message=f"データセット一覧の取得に失敗: project={project_key}: {exc}"
+            log_message=_source_error_message(
+                "データセット一覧の取得", exc,
+                project_key=project_key,
+            )
         ) from exc
 
 
