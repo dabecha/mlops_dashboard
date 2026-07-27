@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 
 import numpy as np
 from scipy import stats
@@ -101,6 +102,79 @@ def detect_drift(
         "ks_alpha": ks_alpha,
         "message": _build_message(drift_detected, psi_level, psi_warning, psi_alert, ks_pvalue, ks_alpha),
     }
+
+
+# ── 予測値ドリフト PSI 推移 ──────────────────────────────────────────────────
+
+@log_call
+def _psi_trend(
+    values: np.ndarray,
+    timestamps: list[datetime],
+    hours: int,
+    window_size: int,
+) -> dict:
+    """選択期間内の日次 PSI 推移を計算する。
+
+    各日の値は「その日の最終ログ時点の直近 window_size 件 vs 参照（最古
+    window_size 件）」の PSI。判定 (detect_drift) と同じ定義を過去に遡って
+    計算したもので、期間 (hours) はグラフの表示範囲にのみ使用する。
+    判定が可能になる前（累計 window_size × 2 件未満）の日は None を返す。
+    """
+    n = len(values)
+    if n < window_size * 2:
+        return {"labels": [], "data": [], "window_size": window_size}
+
+    reference = values[:window_size]
+    since = datetime.utcnow() - timedelta(hours=hours)
+
+    # 期間内の日付ごとに、その日の最終ログの位置（時系列昇順のインデックス）を求める
+    day_last_index: dict[str, int] = {}
+    for i, ts in enumerate(timestamps):
+        if ts >= since:
+            day_last_index[ts.strftime("%Y-%m-%d")] = i
+
+    labels = sorted(day_last_index)
+    data: list[float | None] = []
+    for day in labels:
+        end = day_last_index[day] + 1
+        if end < window_size * 2:
+            data.append(None)
+        else:
+            data.append(round(_compute_psi(reference, values[end - window_size:end]), 4))
+
+    return {"labels": labels, "data": data, "window_size": window_size}
+
+
+@log_call
+def get_drift_over_time(
+    db: Session,
+    project_id: str,
+    hours: int = 168,
+    window_size: int = 100,
+) -> dict:
+    """予測値ドリフト PSI の日次推移を返す（期間は表示範囲のみに適用）。"""
+    if settings.is_dataiku:
+        from ..dataiku_client import get_inference_logs_df
+        df = get_inference_logs_df(project_id)
+        if df.empty:
+            return {"labels": [], "data": [], "window_size": window_size}
+        df = df[~df["is_error"]].sort_values("request_timestamp")
+        values = df["prediction_values"].to_numpy(dtype=float)
+        timestamps = list(df["request_timestamp"])
+    else:
+        logs = (
+            db.query(InferenceLog)
+            .filter(
+                InferenceLog.project_id == project_id,
+                InferenceLog.is_error == False,  # noqa: E712
+            )
+            .order_by(InferenceLog.request_timestamp)
+            .all()
+        )
+        values = np.array([l.prediction_value for l in logs], dtype=float)
+        timestamps = [l.request_timestamp for l in logs]
+
+    return _psi_trend(values, timestamps, hours, window_size)
 
 
 # ── 特徴量ドリフト ────────────────────────────────────────────────────────────

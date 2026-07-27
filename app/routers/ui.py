@@ -164,6 +164,11 @@ async def all_panels(
         psi_alert=cfg["psi_alert"],
         ks_alpha=cfg["ks_alpha"],
     )
+    # PSI 推移のみ選択期間に連動（判定は drift_window_size 基準で期間と独立）
+    drift_trend = drift_svc.get_drift_over_time(
+        db, project_id, hours=hours,
+        window_size=cfg["drift_window_size"],
+    )
     feature_drift = drift_svc.detect_feature_drift(
         db, project_id,
         window_size=cfg["drift_window_size"],
@@ -180,6 +185,7 @@ async def all_panels(
             "latency": latency,
             "accuracy": accuracy,
             "drift": drift,
+            "drift_trend": drift_trend,
             "feature_drift": feature_drift,
             "config": cfg,
             "hours": hours,

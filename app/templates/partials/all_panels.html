@@ -96,7 +96,10 @@
 
 <!-- ===== 予測値ドリフト検知 ===== -->
 <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
-  <h2 class="text-sm font-semibold text-gray-300 mb-4">予測値ドリフト検知（参照ウィンドウ vs 最新ウィンドウ）</h2>
+  <h2 class="text-sm font-semibold text-gray-300 mb-1">予測値ドリフト検知（参照ウィンドウ vs 最新ウィンドウ）</h2>
+  <p class="text-xs text-gray-600 mb-4">
+    判定は直近 {{ config.drift_window_size }} 件と最古 {{ config.drift_window_size }} 件の比較で、期間選択とは独立です（PSI 推移グラフのみ選択期間で表示）
+  </p>
 
   {% if drift.status == "insufficient_data" %}
   <div class="flex items-center gap-3 text-yellow-400 text-sm">
@@ -174,11 +177,31 @@
     参照ウィンドウ: 最古 {{ drift.reference_count }} 件　/　現在ウィンドウ: 最新 {{ drift.current_count }} 件
   </p>
   {% endif %}
+
+  <!-- PSI 推移（各日時点の直近ウィンドウ vs 参照。期間選択は表示範囲のみに適用） -->
+  {% if drift_trend.labels %}
+  <div class="mt-5 pt-4 border-t border-gray-800">
+    <h3 class="text-xs font-semibold text-gray-400 mb-3">
+      PSI 推移（{{ period_label(hours) }}）
+      <span class="font-normal text-gray-600 ml-1">— 各日時点の直近 {{ drift_trend.window_size }} 件 vs 参照ウィンドウ</span>
+    </h3>
+    <div class="relative h-40">
+      <canvas id="drift-trend-chart"
+        data-labels='{{ drift_trend.labels | tojson }}'
+        data-values='{{ drift_trend.data | tojson }}'
+        data-metric-name="PSI"
+        data-threshold-warning="{{ config.psi_warning }}"
+        data-threshold-alert="{{ config.psi_alert }}">
+      </canvas>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 <!-- ===== 特徴量ドリフト ===== -->
 <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
   <h2 class="text-sm font-semibold text-gray-300 mb-1">特徴量ドリフト（デプロイモデル参照分布 vs 最新推論）</h2>
+  <p class="text-xs text-gray-600 mb-1">判定は学習データ vs 直近 {{ config.drift_window_size }} 件の比較で、期間選択とは独立です</p>
   {% if feature_drift.model_version %}
   <p class="text-xs text-gray-600 mb-4">モデルバージョン: {{ feature_drift.model_version }}　/ 参照 {{ feature_drift.reference_count }} 件 vs 現在 {{ feature_drift.current_count }} 件</p>
   {% endif %}
