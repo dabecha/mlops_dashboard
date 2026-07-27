@@ -32,7 +32,7 @@ from .exceptions import (
     MissingColumnError,
     MissingDatasetError,
 )
-from .models import DeployedModel, InferenceLog, Project, ReferenceLog
+from .models import DeployedModel, InferenceLog, Project, ProjectConfig, ReferenceLog
 from .prediction import parse_value
 from .settings import settings
 from .logging_utils import log_call
@@ -217,6 +217,81 @@ def delete_project(project_id: str) -> bool:
     _write_df(remaining, settings.dku_ds_projects)
     logger.info("delete_project: project_id=%s を m_projects から削除", project_id)
     return True
+
+
+# ── プロジェクト閾値設定（管理プロジェクトから取得） ─────────────────────────
+
+def _normalize_config_columns(df):
+    """m_project_configs のカラム名ゆらぎを吸収する（is_higer_better → is_higher_better）。"""
+    if "is_higer_better" in df.columns and "is_higher_better" not in df.columns:
+        df = df.rename(columns={"is_higer_better": "is_higher_better"})
+    return df
+
+
+def _now_for_column(df, column: str, now: datetime):
+    """既存カラムの dtype に合わせた現在時刻を返す（tz-aware カラムには tz 付きで代入する）。"""
+    import pandas as pd
+    if column in df.columns and isinstance(df[column].dtype, pd.DatetimeTZDtype):
+        return pd.Timestamp(now).tz_localize("UTC").tz_convert(df[column].dtype.tz)
+    return now
+
+
+@log_call
+def get_project_config(project_id: str) -> dict | None:
+    """管理プロジェクトの m_project_configs から対象プロジェクトの閾値設定を取得する。
+
+    m_projects と同じ管理プロジェクト (dku_mgmt_project_key) に配備されている
+    データセットを参照する。未登録の場合は None を返す（呼び出し側でデフォルト値を適用）。
+    """
+    import pandas as pd
+    df = _fetch_df(settings.dku_ds_project_configs)
+    df = _normalize_config_columns(df)
+    _validate_columns(df, ProjectConfig, settings.dku_ds_project_configs)
+    if df.empty:
+        return None
+
+    rows = df[df["project_id"].astype(str) == str(project_id)]
+    if rows.empty:
+        return None
+
+    data = _row_to_dict(rows.iloc[0])
+    # 日時カラムは NaT を None に変換し、timezone-aware は naive に揃える
+    for k in ("created_at", "updated_at"):
+        v = data.get(k)
+        if v is None or pd.isna(v):
+            data[k] = None
+        else:
+            ts = pd.to_datetime(v, utc=True)
+            data[k] = ts.tz_localize(None).to_pydatetime() if ts.tzinfo else ts.to_pydatetime()
+    if data.get("is_higher_better") is not None:
+        data["is_higher_better"] = bool(data["is_higher_better"])
+    return data
+
+
+@log_call
+def upsert_project_config(project_id: str, values: dict) -> dict:
+    """管理プロジェクトの m_project_configs に閾値設定を upsert し、保存内容を返す。"""
+    import pandas as pd
+    df = _fetch_df(settings.dku_ds_project_configs)
+    df = _normalize_config_columns(df)
+    _validate_columns(df, ProjectConfig, settings.dku_ds_project_configs)
+
+    now = datetime.utcnow()
+    mask = df["project_id"].astype(str) == str(project_id) if not df.empty else None
+    if mask is None or not bool(mask.any()):
+        next_id = 1 if df.empty else int(pd.to_numeric(df["id"], errors="coerce").fillna(0).max()) + 1
+        new_row = {**values, "id": next_id, "project_id": str(project_id),
+                   "created_at": _now_for_column(df, "created_at", now),
+                   "updated_at": _now_for_column(df, "updated_at", now)}
+        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    else:
+        for k, v in values.items():
+            df.loc[mask, k] = v
+        df.loc[mask, "updated_at"] = _now_for_column(df, "updated_at", now)
+
+    _write_df(df, settings.dku_ds_project_configs)
+    logger.info("upsert_project_config: project_id=%s の閾値設定を保存", project_id)
+    return {**values, "project_id": str(project_id), "updated_at": now}
 
 
 # ── ML 推論ログ（各 Ops 対象プロジェクトから取得） ───────────────────────────

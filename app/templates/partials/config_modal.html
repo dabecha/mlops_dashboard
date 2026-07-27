@@ -95,11 +95,23 @@
         <label class="block text-xs text-gray-400 mb-1">評価指標名
           <span class="text-gray-600 ml-1" title="プロジェクト種別に応じた指標から選択">?</span>
         </label>
-        <select name="metric_name"
+        <select name="metric_name" onchange="syncMetricDirection(this)"
           class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" required>
           {% for m in metrics_for_task(project.task_type) %}
-          <option value="{{ m }}" {% if m == config.metric_name %}selected{% endif %}>{{ m }}</option>
+          <option value="{{ m }}" data-higher-better="{{ 'true' if metric_higher_better(m) else 'false' }}"
+            {% if m == config.metric_name %}selected{% endif %}>{{ m }}</option>
           {% endfor %}
+        </select>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs text-gray-400 mb-1">指標の向き
+          <span class="text-gray-600 ml-1" title="警告・異常の判定方向。指標を変更すると自動で切り替わります">?</span>
+        </label>
+        <select name="is_higher_better"
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500" required>
+          <option value="true" {% if config.is_higher_better %}selected{% endif %}>高いほど良い（閾値を下回ると警告 / 異常）</option>
+          <option value="false" {% if not config.is_higher_better %}selected{% endif %}>低いほど良い（閾値を上回ると警告 / 異常）</option>
         </select>
       </div>
 
@@ -137,9 +149,10 @@
         </div>
       </div>
       <p class="text-xs text-gray-600 mt-2">
-        指標により大小の良し悪しが異なります（例: ROC-AUC / PR-AUC / Precision / Recall / R² は大きいほど良い、MAE / RMSE / MAPE は小さいほど良い）。
-        大きいほど良い指標は「値 ≥ 警告閾値 → 正常 / ≥ 異常閾値 → 警告 / それ以外 → 異常」、
-        小さいほど良い指標は「値 &lt; 警告閾値 → 正常 / &lt; 異常閾値 → 警告 / それ以外 → 異常」で判定します。
+        「指標の向き」の設定に従って判定します。
+        高いほど良い指標は「値 ≥ 警告閾値 → 正常 / ≥ 異常閾値 → 警告 / それ以外 → 異常」、
+        低いほど良い指標は「値 &lt; 警告閾値 → 正常 / &lt; 異常閾値 → 警告 / それ以外 → 異常」です
+        （例: ROC-AUC / PR-AUC / Precision / Recall / R² は高いほど良い、MAE / RMSE / MAPE / logloss は低いほど良い）。
       </p>
     </section>
 

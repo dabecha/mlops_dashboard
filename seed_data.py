@@ -156,6 +156,7 @@ def main() -> None:
                 "metric_name": "ROC-AUC",       # 分類・大きいほど良い
                 "metric_warning": 0.80,
                 "metric_alert": 0.70,
+                "is_higher_better": True,
                 "n": 600,
                 "days": 10,
                 "base_latency": 120.0,
@@ -180,6 +181,7 @@ def main() -> None:
                 "metric_name": "MAE",           # 回帰・小さいほど良い
                 "metric_warning": 8.0,
                 "metric_alert": 15.0,
+                "is_higher_better": False,
                 "n": 400,
                 "days": 7,
                 "base_latency": 85.0,
@@ -204,6 +206,7 @@ def main() -> None:
                 "metric_name": "Recall",        # 分類・大きいほど良い
                 "metric_warning": 0.75,
                 "metric_alert": 0.60,
+                "is_higher_better": True,
                 "n": 300,
                 "days": 5,
                 "base_latency": 200.0,
@@ -238,6 +241,7 @@ def main() -> None:
             metric_name = pdef.pop("metric_name")
             metric_warning = pdef.pop("metric_warning")
             metric_alert = pdef.pop("metric_alert")
+            is_higher_better = pdef.pop("is_higher_better")
 
             project = Project(**pdef)
             db.add(project)
@@ -249,6 +253,7 @@ def main() -> None:
                 metric_name=metric_name,
                 metric_warning=metric_warning,
                 metric_alert=metric_alert,
+                is_higher_better=is_higher_better,
             ))
 
             # デプロイ済みモデルを 1 レコード登録

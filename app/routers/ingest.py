@@ -23,7 +23,7 @@ from ..schemas import (
     ReferenceLogCreate,
     ReferenceLogResponse,
 )
-from ..services.config import DEFAULTS
+from ..services.config import DEFAULTS, apply_defaults
 from ..settings import settings
 from ..logging_utils import log_call
 
@@ -120,6 +120,13 @@ def _check_project_exists(db: Session, project_id: str) -> bool:
 def get_config(project_id: str, db: Session = Depends(get_db)):
     if not _check_project_exists(db, project_id):
         raise NotFoundError("プロジェクトが見つかりません")
+    if settings.is_dataiku:
+        from ..dataiku_client import get_project_config as dku_get_project_config
+        raw = dku_get_project_config(project_id)
+        updated_at = (raw or {}).get("updated_at") or datetime.utcnow()
+        return ProjectConfigResponse(
+            project_id=project_id, updated_at=updated_at, **apply_defaults(raw)
+        )
     cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
     if cfg:
         return cfg
@@ -131,6 +138,12 @@ def get_config(project_id: str, db: Session = Depends(get_db)):
 def upsert_config(project_id: str, body: ProjectConfigUpdate, db: Session = Depends(get_db)):
     if not _check_project_exists(db, project_id):
         raise NotFoundError("プロジェクトが見つかりません")
+    if settings.is_dataiku:
+        from ..dataiku_client import upsert_project_config as dku_upsert_project_config
+        saved = dku_upsert_project_config(project_id, body.model_dump())
+        return ProjectConfigResponse(
+            project_id=project_id, updated_at=saved["updated_at"], **body.model_dump()
+        )
     cfg = db.query(ProjectConfig).filter(ProjectConfig.project_id == project_id).first()
     if cfg:
         for k, v in body.model_dump().items():

@@ -33,10 +33,11 @@ class Project(Base):
 
 
 class ProjectConfig(Base):
-    __tablename__ = "project_configs"
+    __tablename__ = "m_project_configs"
 
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(String(100), ForeignKey("m_projects.project_id"), unique=True, nullable=False)
+    model_id = Column(String(100), ForeignKey("t_deployed_models.model_id"), nullable=True)
 
     drift_window_size = Column(Integer, default=100)
     psi_warning = Column(Float, default=0.10)
@@ -48,9 +49,13 @@ class ProjectConfig(Base):
     # 評価指標の警告/異常閾値（回帰・分類を問わず汎用。旧 accuracy_* / mae_* を統合）
     metric_warning = Column(Float, default=75.0)
     metric_alert = Column(Float, default=60.0)
+    # True: 指標が高いほど良い（閾値を下回ると警告/異常）
+    # False: 指標が低いほど良い（閾値を上回ると警告/異常）
+    is_higher_better = Column(Boolean, nullable=False, default=True)
     # 二値分類でラベル化する確率閾値（Precision / Recall で使用）
     classification_threshold = Column(Float, default=0.5)
 
+    created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
 
     project = relationship("Project", back_populates="config")

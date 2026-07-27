@@ -36,7 +36,7 @@ SQLite ファイル。アプリ起動時に自動生成されます（`mlops.db`
 | テーブル | 種別 | 説明 |
 |---|---|---|
 | `m_projects` | マスタ | ML プロジェクト |
-| `project_configs` | 設定 | ML プロジェクト閾値設定 |
+| `m_project_configs` | 設定 | ML プロジェクト閾値設定 |
 | `t_deployed_models` | マスタ | デプロイ済みモデル |
 | `t_inference_logs` | トランザクション | 推論リクエスト・結果ログ |
 | `t_reference_logs` | トランザクション | 学習データ・特徴量ドリフト参照データ |
@@ -57,22 +57,26 @@ ML プロジェクトのマスターテーブル。
 
 ---
 
-### `project_configs` テーブル
+### `m_project_configs` テーブル
 
 ML プロジェクトごとの閾値設定。未設定の場合はデフォルト値を使用。
+dev / production モードでは、`m_projects` と同じ Dataiku 管理プロジェクトに配備された `m_project_configs` データセットから取得・保存する。
 
 | カラム | 型 | NULL | デフォルト | 説明 |
 |---|---|---|---|---|
 | `id` | INTEGER | NO | auto | 主キー |
 | `project_id` | VARCHAR(100) | NO | — | `m_projects.project_id` への外部キー（ユニーク） |
+| `model_id` | VARCHAR(100) | YES | NULL | `t_deployed_models.model_id` への外部キー |
+| `metric_name` | VARCHAR(50) | NO | `ROC-AUC` | 評価指標名（種別ごとの定義リストから選択。分類: ROC-AUC / PR-AUC / Precision / Recall / logloss、回帰: MAE / RMSE / MAPE / R2） |
+| `metric_warning` | REAL | NO | `75.0` | 評価指標の警告閾値（回帰・分類共通） |
+| `metric_alert` | REAL | NO | `60.0` | 評価指標の異常閾値（回帰・分類共通） |
+| `is_higher_better` | BOOLEAN | NO | `true` | 高いほど良い指標を表すフラグ。True の場合は指標が `metric_warning` / `metric_alert` を下回ると警告 / 異常、False の場合は上回ると警告 / 異常 |
 | `drift_window_size` | INTEGER | NO | `100` | ドリフト検知に使う直近サンプル数 |
 | `psi_warning` | REAL | NO | `0.10` | PSI 警告閾値 |
 | `psi_alert` | REAL | NO | `0.25` | PSI 異常閾値 |
 | `ks_alpha` | REAL | NO | `0.05` | KS 検定の有意水準 |
-| `metric_name` | VARCHAR(50) | NO | `ROC-AUC` | 評価指標名（種別ごとの定義リストから選択。分類: ROC-AUC / PR-AUC / Precision / Recall / logloss、回帰: MAE / RMSE / MAPE / R2） |
-| `metric_warning` | REAL | NO | `75.0` | 評価指標の警告閾値（回帰・分類共通） |
-| `metric_alert` | REAL | NO | `60.0` | 評価指標の異常閾値（回帰・分類共通） |
 | `classification_threshold` | REAL | NO | `0.5` | 二値分類でラベル化する確率閾値（Precision / Recall で使用） |
+| `created_at` | DATETIME | NO | 現在時刻 | 登録日時（日本時間） |
 | `updated_at` | DATETIME | NO | 現在時刻 | 最終更新日時（日本時間） |
 
 ---
@@ -141,17 +145,19 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
     │
     │ 1:1            │ 1:N                     │ 1:N                    │ 1:N
     ▼                ▼                         ▼                        ▼
- project_configs   t_reference_logs       t_inference_logs         t_deployed_models
+ m_project_configs t_reference_logs       t_inference_logs         t_deployed_models
  ────────────────  ──────────────────     ──────────────────────── ────────────────────────────
     id       INT PK  PK log_id  VARCHAR(100)  PK log_id  VARCHAR(100)  PK model_id    VARCHAR(100)
  FK project_id VARCHAR(100) UNIQ FK project_id VARCHAR(100) FK project_id VARCHAR(100) FK project_id VARCHAR(100)
-    drift_window_size FK model_id VARCHAR(100) → batch_log_id               model_version      VARCHAR(100)
-    psi_warning       feature_values TEXT   request_timestamp          feature_dtypes     TEXT  -- JSON
-    psi_alert         actual_values  REAL                              feature_importance TEXT  -- JSON
-    ks_alpha                            FK model_id VARCHAR(100) →      is_activate        BOOLEAN
-    metric_name                         prediction_values              created_at         DATETIME
-    metric_warning/alert                actual_values
-    updated_at                          is_error
+ FK model_id VARCHAR(100) FK model_id VARCHAR(100) → batch_log_id           model_version      VARCHAR(100)
+    drift_window_size feature_values TEXT   request_timestamp          feature_dtypes     TEXT  -- JSON
+    psi_warning       actual_values  REAL                              feature_importance TEXT  -- JSON
+    psi_alert                           FK model_id VARCHAR(100) →      is_activate        BOOLEAN
+    ks_alpha                            prediction_values              created_at         DATETIME
+    metric_name                         actual_values
+    metric_warning/alert                is_error
+    is_higher_better
+    created_at/updated_at
                                         feature_values
                                         feature_dtypes
                                         created_at

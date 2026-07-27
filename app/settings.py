@@ -44,6 +44,10 @@ class Settings:
         self.dku_ds_projects: str = os.environ.get(
             "DKU_DATASET_PROJECTS", "m_projects"
         )
+        # m_projects と同じ管理プロジェクトに配備される閾値設定データセット
+        self.dku_ds_project_configs: str = os.environ.get(
+            "DKU_DATASET_PROJECT_CONFIGS", "m_project_configs"
+        )
         self.dku_ds_inference_logs: str = os.environ.get(
             "DKU_DATASET_INFERENCE_LOGS", "t_inference_logs"
         )

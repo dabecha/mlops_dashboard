@@ -153,9 +153,11 @@
         <!-- 精度 -->
         <td class="px-4 py-4 text-right">
           {% if a.value is not none %}
-          {% if metric_higher_better(a.metric_name) %}
+          {% if row.config.is_higher_better %}
+            {# 高いほど良い指標: 警告閾値を下回ると警告、異常閾値を下回ると異常 #}
             {% set acc_color = 'text-emerald-400' if a.value >= row.config.metric_warning else ('text-yellow-400' if a.value >= row.config.metric_alert else 'text-red-400') %}
           {% else %}
+            {# 低いほど良い指標: 警告閾値を上回ると警告、異常閾値を上回ると異常 #}
             {% set acc_color = 'text-emerald-400' if a.value < row.config.metric_warning else ('text-yellow-400' if a.value < row.config.metric_alert else 'text-red-400') %}
           {% endif %}
           <span class="font-mono {{ acc_color }}">{{ a.value }}</span>

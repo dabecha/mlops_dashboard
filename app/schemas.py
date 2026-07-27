@@ -85,6 +85,8 @@ class ProjectConfigUpdate(BaseModel):
     metric_name: str = Field("ROC-AUC", min_length=1, max_length=50)
     metric_warning: float = Field(75.0)
     metric_alert: float = Field(60.0)
+    # True: 高いほど良い指標（閾値を下回ると警告/異常） / False: 低いほど良い指標（閾値を上回ると警告/異常）
+    is_higher_better: bool = Field(True)
     classification_threshold: float = Field(0.5, ge=0.0, le=1.0)
 
 

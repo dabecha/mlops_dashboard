@@ -102,6 +102,7 @@
         metric_name:       data.metric_name,
         metric_warning:    parseFloat(data.metric_warning),
         metric_alert:      parseFloat(data.metric_alert),
+        is_higher_better:  data.is_higher_better === 'true',
         classification_threshold: parseFloat(data.classification_threshold),
       };
 
@@ -124,6 +125,15 @@
         }
       } catch (e) {
         if (msgEl) { msgEl.textContent = '通信エラーが発生しました'; msgEl.className = 'text-xs text-red-400'; }
+      }
+    }
+
+    // 評価指標の選択に合わせて「指標の向き」を指標カタログの既定値に同期する
+    function syncMetricDirection(sel) {
+      const dir = sel.form && sel.form.elements['is_higher_better'];
+      const opt = sel.options[sel.selectedIndex];
+      if (dir && opt && opt.dataset.higherBetter) {
+        dir.value = opt.dataset.higherBetter;
       }
     }
 

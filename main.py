@@ -45,7 +45,8 @@ async def lifespan(app: FastAPI):
             settings.dataiku_host or "(内部コンテキスト)",
             settings.dku_mgmt_project_key,
         )
-# SQLite は常に初期化（設定値・閾値の保存に使用）
+    # SQLite を初期化（local_dev モードのデータ保存に使用。
+    # dev / production モードの閾値設定は Dataiku の m_project_configs を参照）
     Base.metadata.create_all(bind=engine)
     yield
 
