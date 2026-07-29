@@ -295,7 +295,14 @@
   <h2 class="text-sm font-semibold text-gray-300 mb-1">特徴量ドリフト（デプロイモデル参照分布 vs 最新推論）</h2>
   <p class="text-xs text-gray-600 mb-1">判定は学習データ vs 直近 {{ config.drift_window_size }} 件の比較で、期間選択とは独立です</p>
   {% if feature_drift.model_version %}
-  <p class="text-xs text-gray-600 mb-4">モデルバージョン: {{ feature_drift.model_version }}　/ 参照 {{ feature_drift.reference_count }} 件 vs 現在 {{ feature_drift.current_count }} 件</p>
+  <p class="text-xs text-gray-600 mb-1">モデルバージョン: {{ feature_drift.model_version }}　/ 参照 {{ feature_drift.reference_count }} 件 vs 現在 {{ feature_drift.current_count }} 件</p>
+  {% endif %}
+  {% if feature_drift.excluded_features %}
+  <p class="text-xs text-yellow-500/80 mb-4">
+    対象外（カテゴリ特徴量のため PSI 算出不可）: <span class="font-mono">{{ feature_drift.excluded_features | join(', ') }}</span>
+  </p>
+  {% else %}
+  <p class="mb-4"></p>
   {% endif %}
 
   {% if feature_drift.status == "no_model" or feature_drift.status == "no_reference_features" or feature_drift.status == "insufficient_data" %}
@@ -367,7 +374,7 @@
 
   {% else %}
   <div class="flex items-center justify-center h-32 text-gray-600 text-sm">
-    特徴量データがありません
+    {% if feature_drift.excluded_features %}PSI を算出できる数値特徴量がありません（カテゴリ特徴量は対象外）{% else %}特徴量データがありません{% endif %}
   </div>
   {% endif %}
 </div>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime
 
 import numpy as np
@@ -503,6 +504,18 @@ def _dku_detect_feature_drift(
 
 # ── 共通ロジック ─────────────────────────────────────────────────────────────
 
+def _to_finite_float(v) -> float | None:
+    """float に変換できる有限値のみ返す。
+
+    カテゴリ値（文字列）・リスト等の変換不能な値、および NaN / inf は None を返す。
+    """
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) else None
+
+
 @log_call
 def _compute_feature_drift_result(
     ref_features: list[dict],
@@ -514,19 +527,24 @@ def _compute_feature_drift_result(
 ) -> dict:
     feature_names = list(ref_features[0].keys())
     results = []
+    excluded_features: list[str] = []
 
     for feat in feature_names:
-        ref_arr = np.array(
-            [f[feat] for f in ref_features if feat in f and f[feat] is not None],
-            dtype=float,
-        )
-        cur_arr = np.array(
-            [f[feat] for f in current_features if feat in f and f[feat] is not None],
-            dtype=float,
-        )
+        ref_raw = [f[feat] for f in ref_features if feat in f and f[feat] is not None]
+        cur_raw = [f[feat] for f in current_features if feat in f and f[feat] is not None]
+        ref_vals = [v for v in (_to_finite_float(x) for x in ref_raw) if v is not None]
+        cur_vals = [v for v in (_to_finite_float(x) for x in cur_raw) if v is not None]
 
-        if len(ref_arr) < 5 or len(cur_arr) < 5:
+        # 値はあるが数値に変換できない特徴量（カテゴリ値等）は PSI の対象外として明示する
+        if (ref_raw and not ref_vals) or (cur_raw and not cur_vals):
+            excluded_features.append(feat)
             continue
+
+        if len(ref_vals) < 5 or len(cur_vals) < 5:
+            continue
+
+        ref_arr = np.array(ref_vals, dtype=float)
+        cur_arr = np.array(cur_vals, dtype=float)
 
         psi = _compute_psi(ref_arr, cur_arr)
         importance = feature_importance.get(feat, 0.0)
@@ -546,6 +564,7 @@ def _compute_feature_drift_result(
         "reference_count": len(ref_features),
         "current_count": len(current_features),
         "features": results,
+        "excluded_features": excluded_features,
         "drift_detected": max_psi >= psi_alert,
         "psi_warning": psi_warning,
         "psi_alert": psi_alert,
