@@ -44,14 +44,14 @@
       <span class="ml-2 text-gray-600">• システム指標・精度: 選択期間　ドリフト: 直近ウィンドウ</span>
     </p>
   </div>
-  <span class="text-xs text-gray-600">60秒ごとに自動更新</span>
+  <span class="text-xs text-gray-600">{% if auto_refresh_enabled %}60秒ごとに自動更新{% else %}自動更新オフ{% endif %}</span>
 </div>
 
 <!-- サマリーパネル（htmx 自動更新） -->
 <div id="summary-content"
      hx-get="./ui/summary-panels"
      hx-vals="js:{hours: document.getElementById('hours-select').value, drift_window: 100}"
-     hx-trigger="load, every 60s"
+     hx-trigger="load{% if auto_refresh_enabled %}, every 60s{% endif %}"
      hx-indicator="#loading-indicator">
   <div class="flex items-center justify-center h-48 text-gray-500">
     <svg class="w-6 h-6 animate-spin mr-2" fill="none" viewBox="0 0 24 24">

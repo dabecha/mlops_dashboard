@@ -9,14 +9,17 @@ import asyncio
 import functools
 import inspect
 import os
-from logging import DEBUG, StreamHandler, getLogger
+from logging import StreamHandler, getLogger
+
+from .settings import settings
 
 # ── ロガー設定（共通・ハンドラ二重登録を防止） ────────────────────────────────
+# レベルは .env の LOG_LEVEL で設定する（デフォルト: DEBUG）
 logger = getLogger("mlops_dashboard.backend")
-logger.setLevel(DEBUG)
+logger.setLevel(settings.log_level)
 if not logger.handlers:
     _handler = StreamHandler()
-    _handler.setLevel(DEBUG)
+    _handler.setLevel(settings.log_level)
     logger.addHandler(_handler)
 logger.propagate = False
 

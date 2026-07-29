@@ -9,6 +9,26 @@ from .exceptions import ConfigurationError
 
 load_dotenv()
 
+_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+_BOOL_TRUE = ("true", "1", "yes", "on")
+_BOOL_FALSE = ("false", "0", "no", "off")
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    """環境変数を bool として読む（true/1/yes/on | false/0/no/off、大小文字不問）。"""
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    val = raw.strip().lower()
+    if val in _BOOL_TRUE:
+        return True
+    if val in _BOOL_FALSE:
+        return False
+    raise ConfigurationError(
+        log_message=f"{name} の値が不正です: '{raw}'. 有効な値: true | false"
+    )
+
+
 class AppMode(str, Enum):
     LOCAL_DEV = "local_dev"
     DEV = "dev"
@@ -24,6 +44,21 @@ class Settings:
             raise ConfigurationError(
                 log_message=f"APP_MODE の値が不正です: '{raw_mode}'. 有効な値: local_dev | dev | production"
             ) from exc
+
+        # ── アプリ共通設定 ────────────────────────────────────────────
+        # ダッシュボードの自動更新（詳細: 30 秒、サマリー: 60 秒）の有効化フラグ
+        self.auto_refresh_enabled: bool = _env_bool("AUTO_REFRESH_ENABLED", True)
+
+        # ログレベル（DEBUG のとき @log_call の呼び出しログも出力される）
+        raw_level = os.environ.get("LOG_LEVEL", "DEBUG").strip().upper()
+        if raw_level not in _LOG_LEVELS:
+            raise ConfigurationError(
+                log_message=(
+                    f"LOG_LEVEL の値が不正です: '{raw_level}'. "
+                    f"有効な値: {' | '.join(_LOG_LEVELS)}"
+                )
+            )
+        self.log_level: str = raw_level
 
         # ── SQLite (local_dev) ────────────────────────────────────────
         self.sqlite_url: str = os.environ.get("DATABASE_URL", "sqlite:///./mlops.db")

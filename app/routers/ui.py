@@ -31,6 +31,8 @@ templates.env.filters["duration"] = format_duration
 templates.env.globals["metrics_for_task"] = metrics_for_task
 templates.env.globals["metric_higher_better"] = is_higher_better
 templates.env.globals["period_label"] = period_label
+# ダッシュボード自動更新の有効化フラグ（.env の AUTO_REFRESH_ENABLED）
+templates.env.globals["auto_refresh_enabled"] = settings.auto_refresh_enabled
 
 
 @log_call

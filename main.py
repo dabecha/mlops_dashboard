@@ -12,6 +12,9 @@ from app.exceptions import AppError
 from app.routers import ingest, ui
 from app.settings import settings
 
+# アプリ全体（root ロガー経由）のログレベルを .env の LOG_LEVEL で設定する
+logging.basicConfig(level=settings.log_level)
+
 logger = logging.getLogger("mlops_dashboard")
 
 _TEMPLATE_DIR = Path(__file__).parent / "app" / "templates"

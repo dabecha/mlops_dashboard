@@ -78,7 +78,7 @@
 <div id="dashboard-content"
      hx-get="./ui/panels"
      hx-include="#filter-form"
-     hx-trigger="load, every 30s"
+     hx-trigger="load{% if auto_refresh_enabled %}, every 30s{% endif %}"
      hx-indicator="#loading-indicator">
   <div class="flex items-center justify-center h-48 text-gray-500">
     <svg class="w-6 h-6 animate-spin mr-2" fill="none" viewBox="0 0 24 24">
