@@ -85,10 +85,15 @@ class ReferenceLog(Base):
     project_id = Column(String(100), ForeignKey("m_projects.project_id"), nullable=False, index=True)
     model_id = Column(String(100), ForeignKey("t_deployed_models.model_id"), nullable=True, index=True)
     feature_values = Column(Text, nullable=True)   # JSON: {"age": 35.0, "amount": 5200.0}
-    actual_values = Column(Float, nullable=True)
+    actual_values = Column(Text, nullable=True)    # JSON: {"label": 値}（二値/回帰は1組）
 
     project = relationship("Project", back_populates="reference_logs")
     deployed_model = relationship("DeployedModel", back_populates="reference_logs")
+
+    @property
+    def actual_value(self) -> float | None:
+        """actual_values(JSON {"label": 値}) から代表スカラー値を取り出す。"""
+        return parse_value(self.actual_values)
 
 
 class InferenceLog(Base):

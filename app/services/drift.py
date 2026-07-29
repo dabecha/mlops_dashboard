@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..exceptions import DataIntegrityError
 from ..models import DeployedModel, InferenceLog, ReferenceLog
+from ..prediction import parse_value
 from ..settings import settings
 from ..logging_utils import log_call
 
@@ -122,7 +123,11 @@ def detect_target_drift(
         .limit(window_size)
         .all()
     )
-    reference = np.array([r[0] for r in ref_rows], dtype=float)
+    # actual_values は JSON({"label": 値})のため代表スカラー値に変換する
+    reference = np.array(
+        [v for r in ref_rows if (v := parse_value(r[0])) is not None],
+        dtype=float,
+    )
     if reference.size == 0:
         return _target_drift_unavailable(
             "no_reference_actuals",
@@ -140,7 +145,10 @@ def detect_target_drift(
         .limit(window_size)
         .all()
     )
-    current = np.array([l.actual_value for l in cur_logs], dtype=float)
+    current = np.array(
+        [v for l in cur_logs if (v := l.actual_value) is not None],
+        dtype=float,
+    )
     if current.size < window_size:
         return _target_drift_unavailable(
             "insufficient_data",

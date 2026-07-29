@@ -59,7 +59,8 @@ def make_reference_log_samples(
                 project_id=project_id,
                 model_id=model_id,
                 feature_values=json.dumps(fv),
-                actual_values=_sample_actual(actual_distribution),
+                # 正解ラベルは {"label": 値} の JSON（二値/回帰は1組）
+                actual_values=json.dumps({"label": _sample_actual(actual_distribution)}),
             )
         )
     return records

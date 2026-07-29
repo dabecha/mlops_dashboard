@@ -501,6 +501,10 @@ def get_reference_logs_df(project_id: str, model_id: str | None = None):
     if model_id is not None and "model_id" in df.columns:
         df = df[df["model_id"].astype(str) == str(model_id)].copy()
 
+    # actual_values (JSON {"label": 値}) は代表スカラー値に変換
+    if "actual_values" in df.columns:
+        df["actual_values"] = df["actual_values"].map(parse_value)
+
     return df.reset_index(drop=True)
 
 

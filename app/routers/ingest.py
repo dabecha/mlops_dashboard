@@ -92,13 +92,18 @@ def register_reference_log(
     body: ReferenceLogCreate,
     db: Session = Depends(get_db),
 ):
-    if not db.get(Project, project_id):
+    project = db.get(Project, project_id)
+    if not project:
         raise NotFoundError("プロジェクトが見つかりません")
+
+    # 二値分類・回帰では actual が単一の {label: 値} であることを検証
+    validate_pairs("actual_values", body.actual_values, project.task_type)
+
     ref_log = ReferenceLog(
         project_id=project_id,
         model_id=body.model_id,
         feature_values=json.dumps(body.feature_values) if body.feature_values else None,
-        actual_values=body.actual_values,
+        actual_values=json.dumps(body.actual_values) if body.actual_values is not None else None,
     )
     db.add(ref_log)
     db.commit()

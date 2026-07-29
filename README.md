@@ -107,7 +107,7 @@ dev / production モードでは、`m_projects` と同じ Dataiku 管理プロ�
 | `project_id` | VARCHAR(100) | NO | — | `m_projects.project_id` への外部キー |
 | `model_id` | VARCHAR(100) | YES | NULL | `t_deployed_models.model_id` への外部キー |
 | `feature_values` | TEXT | YES | NULL | 学習サンプルの特徴量 JSON（例: `{"age": 35.0, "amount": 5200.0}`） |
-| `actual_values` | REAL | YES | NULL | 学習時の正解ラベル。ターゲットドリフトの参照分布として使用 |
+| `actual_values` | TEXT | YES | NULL | 学習時の正解ラベル JSON（例: 二値分類 `{"value": 0.8}`、多値分類 `{"cat": 0.4, "dog": 0.5, "pig": 0.1}`）。ターゲットドリフトの参照分布として使用 |
 
 ---
 
@@ -151,7 +151,7 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
  FK project_id VARCHAR(100) UNIQ FK project_id VARCHAR(100) FK project_id VARCHAR(100) FK project_id VARCHAR(100)
  FK model_id VARCHAR(100) FK model_id VARCHAR(100) → batch_log_id           model_version      VARCHAR(100)
     drift_window_size feature_values TEXT   request_timestamp          feature_dtypes     TEXT  -- JSON
-    psi_warning       actual_values  REAL                              feature_importance TEXT  -- JSON
+    psi_warning       actual_values  TEXT -- JSON                      feature_importance TEXT  -- JSON
     psi_alert                           FK model_id VARCHAR(100) →      is_activate        BOOLEAN
     ks_alpha                            prediction_values              created_at         DATETIME
     metric_name                         actual_values
@@ -208,7 +208,7 @@ Content-Type: application/json
 {
   "model_id": "v1.2.0",                                   # 任意: t_deployed_models.model_id
   "feature_values": {"age": 35.0, "amount": 5200.0},     # 任意: 学習サンプル特徴量
-  "actual_values": 1.0                                    # 任意: 正解ラベル
+  "actual_values": {"label": 1.0}                         # 任意: 正解ラベル {"label": 値}（二値/回帰は1組）
 }
 ```
 

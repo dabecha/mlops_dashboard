@@ -53,16 +53,23 @@ class DeployedModelResponse(BaseModel):
 class ReferenceLogCreate(BaseModel):
     model_id: Optional[str] = None
     feature_values: Optional[Dict[str, Any]] = None
-    actual_values: Optional[float] = None
+    actual_values: Optional[Dict[str, float]] = None  # {"label": 値}（二値/回帰は1組）
 
 
 class ReferenceLogResponse(BaseModel):
     log_id: str
     project_id: str
     model_id: Optional[str]
-    actual_values: Optional[float]
+    actual_values: Optional[Dict[str, float]]
 
     model_config = {"from_attributes": True}
+
+    @field_validator("actual_values", mode="before")
+    @classmethod
+    def _parse_json(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
 
 
 class InferenceLogCreate(BaseModel):
