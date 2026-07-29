@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import numpy as np
 from sqlalchemy.orm import Session
@@ -54,14 +54,18 @@ def _dku_batch_latencies_ms(df) -> list[float]:
 # ── SQLite 実装 ──────────────────────────────────────────────────────────────
 
 @log_call
-def get_summary(db: Session, project_id: str, hours: int = 24) -> dict:
+def get_summary(db: Session, project_id: str, from_dt: datetime, to_dt: datetime) -> dict:
+    """選択期間（from_dt 以上 to_dt 未満）のシステム指標サマリーを返す。"""
     if settings.is_dataiku:
-        return _dku_get_summary(project_id, hours)
+        return _dku_get_summary(project_id, from_dt, to_dt)
 
-    since = datetime.utcnow() - timedelta(hours=hours)
     logs = (
         db.query(InferenceLog)
-        .filter(InferenceLog.project_id == project_id, InferenceLog.request_timestamp >= since)
+        .filter(
+            InferenceLog.project_id == project_id,
+            InferenceLog.request_timestamp >= from_dt,
+            InferenceLog.request_timestamp < to_dt,
+        )
         .all()
     )
 
@@ -106,16 +110,17 @@ def get_summary(db: Session, project_id: str, hours: int = 24) -> dict:
 
 
 @log_call
-def get_latency_distribution(db: Session, project_id: str, hours: int = 24) -> dict:
+def get_latency_distribution(db: Session, project_id: str, from_dt: datetime, to_dt: datetime) -> dict:
+    """選択期間（from_dt 以上 to_dt 未満）の応答時間分布を返す。"""
     if settings.is_dataiku:
-        return _dku_get_latency_distribution(project_id, hours)
+        return _dku_get_latency_distribution(project_id, from_dt, to_dt)
 
-    since = datetime.utcnow() - timedelta(hours=hours)
     rows = (
         db.query(InferenceLog.batch_log_id, InferenceLog.request_timestamp, InferenceLog.updated_at)
         .filter(
             InferenceLog.project_id == project_id,
-            InferenceLog.request_timestamp >= since,
+            InferenceLog.request_timestamp >= from_dt,
+            InferenceLog.request_timestamp < to_dt,
             InferenceLog.is_error == False,  # noqa: E712
         )
         .all()
@@ -132,19 +137,20 @@ def get_latency_distribution(db: Session, project_id: str, hours: int = 24) -> d
 
 @log_call
 def get_latest_accuracy(
-    db: Session, project_id: str, hours: int = 168, task_type: str = "binary",
+    db: Session, project_id: str, from_dt: datetime, to_dt: datetime, task_type: str = "binary",
     metric_name: str | None = None, threshold: float = 0.5,
 ) -> dict:
+    """選択期間（from_dt 以上 to_dt 未満）の精度を返す。"""
     if settings.is_dataiku:
-        return _dku_get_latest_accuracy(project_id, hours, task_type, metric_name, threshold)
+        return _dku_get_latest_accuracy(project_id, from_dt, to_dt, task_type, metric_name, threshold)
 
     metric = resolve_metric(metric_name, task_type)
-    since = datetime.utcnow() - timedelta(hours=hours)
     logs = (
         db.query(InferenceLog)
         .filter(
             InferenceLog.project_id == project_id,
-            InferenceLog.request_timestamp >= since,
+            InferenceLog.request_timestamp >= from_dt,
+            InferenceLog.request_timestamp < to_dt,
             InferenceLog.actual_values != None,  # noqa: E711
             InferenceLog.is_error == False,  # noqa: E712
         )
@@ -164,19 +170,20 @@ def get_latest_accuracy(
 
 @log_call
 def get_accuracy_over_time(
-    db: Session, project_id: str, hours: int = 168, task_type: str = "binary",
+    db: Session, project_id: str, from_dt: datetime, to_dt: datetime, task_type: str = "binary",
     metric_name: str | None = None, threshold: float = 0.5,
 ) -> dict:
+    """選択期間（from_dt 以上 to_dt 未満）の日次精度推移を返す。"""
     if settings.is_dataiku:
-        return _dku_get_accuracy_over_time(project_id, hours, task_type, metric_name, threshold)
+        return _dku_get_accuracy_over_time(project_id, from_dt, to_dt, task_type, metric_name, threshold)
 
     metric = resolve_metric(metric_name, task_type)
-    since = datetime.utcnow() - timedelta(hours=hours)
     logs = (
         db.query(InferenceLog)
         .filter(
             InferenceLog.project_id == project_id,
-            InferenceLog.request_timestamp >= since,
+            InferenceLog.request_timestamp >= from_dt,
+            InferenceLog.request_timestamp < to_dt,
             InferenceLog.actual_values != None,  # noqa: E711
         )
         .order_by(InferenceLog.request_timestamp)
@@ -204,11 +211,10 @@ def get_accuracy_over_time(
 # ── Dataiku 実装 ─────────────────────────────────────────────────────────────
 
 @log_call
-def _dku_get_summary(project_id: str, hours: int) -> dict:
+def _dku_get_summary(project_id: str, from_dt: datetime, to_dt: datetime) -> dict:
     from ..dataiku_client import get_inference_logs_df
 
-    since = datetime.utcnow() - timedelta(hours=hours)
-    df = get_inference_logs_df(project_id, since)
+    df = get_inference_logs_df(project_id, since=from_dt, until=to_dt)
 
     empty = {
         "total_requests": 0, "error_count": 0, "error_rate": 0.0,
@@ -246,11 +252,10 @@ def _dku_get_summary(project_id: str, hours: int) -> dict:
 
 
 @log_call
-def _dku_get_latency_distribution(project_id: str, hours: int) -> dict:
+def _dku_get_latency_distribution(project_id: str, from_dt: datetime, to_dt: datetime) -> dict:
     from ..dataiku_client import get_inference_logs_df
 
-    since = datetime.utcnow() - timedelta(hours=hours)
-    df = get_inference_logs_df(project_id, since)
+    df = get_inference_logs_df(project_id, since=from_dt, until=to_dt)
     df = df[~df["is_error"]]
     latencies = _dku_batch_latencies_ms(df)
     if not latencies:
@@ -263,12 +268,11 @@ def _dku_get_latency_distribution(project_id: str, hours: int) -> dict:
 
 
 @log_call
-def _dku_get_latest_accuracy(project_id: str, hours: int, task_type: str, metric_name: str | None = None, threshold: float = 0.5) -> dict:
+def _dku_get_latest_accuracy(project_id: str, from_dt: datetime, to_dt: datetime, task_type: str, metric_name: str | None = None, threshold: float = 0.5) -> dict:
     from ..dataiku_client import get_inference_logs_df
 
     metric = resolve_metric(metric_name, task_type)
-    since = datetime.utcnow() - timedelta(hours=hours)
-    df = get_inference_logs_df(project_id, since)
+    df = get_inference_logs_df(project_id, since=from_dt, until=to_dt)
 
     df = df[df["actual_values"].notna() & ~df["is_error"]]
     if df.empty:
@@ -284,12 +288,11 @@ def _dku_get_latest_accuracy(project_id: str, hours: int, task_type: str, metric
 
 
 @log_call
-def _dku_get_accuracy_over_time(project_id: str, hours: int, task_type: str, metric_name: str | None = None, threshold: float = 0.5) -> dict:
+def _dku_get_accuracy_over_time(project_id: str, from_dt: datetime, to_dt: datetime, task_type: str, metric_name: str | None = None, threshold: float = 0.5) -> dict:
     from ..dataiku_client import get_inference_logs_df
 
     metric = resolve_metric(metric_name, task_type)
-    since = datetime.utcnow() - timedelta(hours=hours)
-    df = get_inference_logs_df(project_id, since)
+    df = get_inference_logs_df(project_id, since=from_dt, until=to_dt)
 
     df = df[df["actual_values"].notna()].sort_values("request_timestamp")
     if df.empty:

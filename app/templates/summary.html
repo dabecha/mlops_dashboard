@@ -5,14 +5,13 @@
 
 {% block header_controls %}
 <label class="text-sm text-gray-400">期間</label>
-<select id="hours-select"
+<input type="date" id="from-date" value="{{ default_from }}" max="{{ default_to }}"
   class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
   onchange="loadSummary()">
-  <option value="24" selected>直近1日</option>
-  <option value="168">直近1週</option>
-  <option value="720">直近1カ月</option>
-  <option value="4320">直近6カ月</option>
-</select>
+<span class="text-sm text-gray-500">〜</span>
+<input type="date" id="to-date" value="{{ default_to }}"
+  class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
+  onchange="loadSummary()">
 
 <button type="button" onclick="loadSummary()"
   class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
@@ -50,7 +49,7 @@
 <!-- サマリーパネル（htmx 自動更新） -->
 <div id="summary-content"
      hx-get="./ui/summary-panels"
-     hx-vals="js:{hours: document.getElementById('hours-select').value, drift_window: 100}"
+     hx-vals="js:{from_date: document.getElementById('from-date').value, to_date: document.getElementById('to-date').value}"
      hx-trigger="load{% if auto_refresh_enabled %}, every 60s{% endif %}"
      hx-indicator="#loading-indicator">
   <div class="flex items-center justify-center h-48 text-gray-500">
@@ -77,11 +76,12 @@
 {% block scripts %}
 <script>
   function loadSummary() {
-    const hours = document.getElementById('hours-select').value;
+    const fromDate = document.getElementById('from-date').value;
+    const toDate = document.getElementById('to-date').value;
     htmx.ajax('GET', './ui/summary-panels', {
       target: '#summary-content',
       indicator: '#loading-indicator',
-      values: { hours: hours, drift_window: 100 }
+      values: { from_date: fromDate, to_date: toDate }
     });
   }
 </script>

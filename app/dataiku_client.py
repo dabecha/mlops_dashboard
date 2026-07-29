@@ -363,11 +363,12 @@ def upsert_project_config(project_id: str, values: dict) -> dict:
 # ── ML 推論ログ（各 Ops 対象プロジェクトから取得） ───────────────────────────
 
 @log_call
-def get_inference_logs_df(project_id: str, since: datetime | None = None):
+def get_inference_logs_df(project_id: str, since: datetime | None = None, until: datetime | None = None):
     """対象プロジェクトの t_inference_logs を取得する。
 
     project_id を Dataiku プロジェクトキーとして解決し、
     そのプロジェクト内の t_inference_logs データセットを取得する。
+    since / until を指定すると request_timestamp が since 以上 until 未満の行に絞る。
     """
     import pandas as pd
     dku_project_key = _get_target_project_key(project_id)
@@ -391,6 +392,8 @@ def get_inference_logs_df(project_id: str, since: datetime | None = None):
             df[col] = df[col].map(parse_value)
     if since is not None:
         df = df[df["request_timestamp"] >= since]
+    if until is not None:
+        df = df[df["request_timestamp"] < until]
     if "is_error" in df.columns:
         df["is_error"] = df["is_error"].fillna(False).astype(bool)
     return df.reset_index(drop=True)

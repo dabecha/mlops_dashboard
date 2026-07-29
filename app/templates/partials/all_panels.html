@@ -9,7 +9,7 @@
       実績値連携 {{ "{:,}".format(summary.actual_count) }} 件
       {% if summary.total_requests > 0 %}<span class="text-gray-600">({{ summary.actual_rate }}%)</span>{% endif %}
     </p>
-    <p class="text-xs text-gray-500 mt-1">直近 {{ hours }}h</p>
+    <p class="text-xs text-gray-500 mt-1">{{ from_date }} 〜 {{ to_date }}</p>
   </div>
 
   <!-- エラー数 -->
@@ -27,7 +27,7 @@
   <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
     <p class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">平均応答時間</p>
     <p class="text-2xl font-bold text-white">{{ summary.avg_latency_ms | duration }}</p>
-    <p class="text-xs text-gray-500 mt-1">直近 {{ hours }}h</p>
+    <p class="text-xs text-gray-500 mt-1">{{ from_date }} 〜 {{ to_date }}</p>
   </div>
 
   <!-- パーセンタイルレイテンシ -->
@@ -56,7 +56,7 @@
 
   <!-- 応答時間分布 -->
   <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-    <h2 class="text-sm font-semibold text-gray-300 mb-4">応答時間分布（直近 {{ hours }}h）</h2>
+    <h2 class="text-sm font-semibold text-gray-300 mb-4">応答時間分布（{{ from_date }} 〜 {{ to_date }}）</h2>
     {% if latency.labels %}
     <div class="relative h-52">
       <canvas id="latency-chart"
@@ -73,7 +73,7 @@
   <!-- 精度推移 -->
   <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
     <h2 class="text-sm font-semibold text-gray-300 mb-4">
-      精度推移（{{ period_label(hours) }}）
+      精度推移（{{ from_date }} 〜 {{ to_date }}）
       {% if accuracy.metric_name %}
       <span class="text-xs font-normal text-gray-500 ml-1">— {{ accuracy.metric_name }}</span>
       {% endif %}
@@ -274,7 +274,7 @@
   {% if drift_trend.labels %}
   <div class="mt-5 pt-4 border-t border-gray-800">
     <h3 class="text-xs font-semibold text-gray-400 mb-3">
-      PSI 推移（{{ period_label(hours) }}）
+      PSI 推移（{{ from_date }} 〜 {{ to_date }}）
       <span class="font-normal text-gray-600 ml-1">— 各日時点の直近 {{ drift_trend.window_size }} 件 vs 参照ウィンドウ</span>
     </h3>
     <div class="relative h-40">

@@ -26,14 +26,13 @@
 </select>
 
 <label class="text-sm text-gray-400">期間</label>
-<select id="hours-select" name="hours"
+<input type="date" id="from-date" value="{{ default_from }}" max="{{ default_to }}"
   class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
   onchange="loadPanels()">
-  <option value="24" selected>直近1日</option>
-  <option value="168">直近1週</option>
-  <option value="720">直近1カ月</option>
-  <option value="4320">直近6カ月</option>
-</select>
+<span class="text-sm text-gray-500">〜</span>
+<input type="date" id="to-date" value="{{ default_to }}"
+  class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
+  onchange="loadPanels()">
 
 <button type="button"
   onclick="openConfigModal(document.getElementById('project-select').value, loadPanels)"
@@ -72,7 +71,8 @@
 {% if projects %}
 <form id="filter-form" class="hidden">
   <input type="hidden" id="project-id-hidden" name="project_id" value="{{ initial_project_id }}">
-  <input type="hidden" id="hours-hidden" name="hours" value="24">
+  <input type="hidden" id="from-date-hidden" name="from_date" value="{{ default_from }}">
+  <input type="hidden" id="to-date-hidden" name="to_date" value="{{ default_to }}">
 </form>
 
 <div id="dashboard-content"
@@ -104,14 +104,16 @@
 <script>
   function loadPanels() {
     const projectId = document.getElementById('project-select')?.value;
-    const hours = document.getElementById('hours-select')?.value ?? '24';
+    const fromDate = document.getElementById('from-date')?.value ?? '';
+    const toDate = document.getElementById('to-date')?.value ?? '';
     if (!projectId) return;
     document.getElementById('project-id-hidden').value = projectId;
-    document.getElementById('hours-hidden').value = hours;
+    document.getElementById('from-date-hidden').value = fromDate;
+    document.getElementById('to-date-hidden').value = toDate;
     htmx.ajax('GET', './ui/panels', {
       target: '#dashboard-content',
       indicator: '#loading-indicator',
-      values: { project_id: projectId, hours: hours }
+      values: { project_id: projectId, from_date: fromDate, to_date: toDate }
     });
   }
 
