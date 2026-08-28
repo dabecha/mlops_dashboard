@@ -31,8 +31,11 @@ templates = Jinja2Templates(directory=_TEMPLATE_DIR)
 templates.env.filters["duration"] = format_duration
 templates.env.globals["metrics_for_task"] = metrics_for_task
 templates.env.globals["metric_higher_better"] = is_higher_better
-# ダッシュボード自動更新の有効化フラグ（.env の AUTO_REFRESH_ENABLED）
+# ダッシュボード自動更新の設定（.env の AUTO_REFRESH_* ）。
+# 間隔は管理ページから変更でき、以下は未設定ブラウザでの初期値として使われる。
 templates.env.globals["auto_refresh_enabled"] = settings.auto_refresh_enabled
+templates.env.globals["auto_refresh_summary_seconds"] = settings.auto_refresh_summary_seconds
+templates.env.globals["auto_refresh_detail_seconds"] = settings.auto_refresh_detail_seconds
 
 
 @log_call

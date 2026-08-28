@@ -69,6 +69,66 @@
     </a>
   </footer>
 
+  <!-- 自動更新（サマリー / 詳細）の共通ヘルパー -->
+  <script>
+    // 間隔は管理ページから変更し、ブラウザの localStorage に保存する。
+    // .env の AUTO_REFRESH_ENABLED=false はサーバー側のマスタースイッチで、
+    // false のときは localStorage の設定によらず自動更新しない。
+    window.AutoRefresh = (function () {
+      const STORAGE_PREFIX = 'mlops.autoRefresh.';
+      const ENABLED  = {{ 'true' if auto_refresh_enabled else 'false' }};
+      const DEFAULTS = {
+        summary: {{ auto_refresh_summary_seconds }},
+        detail:  {{ auto_refresh_detail_seconds }}
+      };
+      const CHOICES = [0, 10, 30, 60, 300, 600];  // 0 = オフ
+      const timers = {};
+
+      /** 保存済みの間隔（秒）を返す。未保存なら .env の初期値。 */
+      function get(page) {
+        try {
+          const raw = localStorage.getItem(STORAGE_PREFIX + page);
+          if (raw !== null) {
+            const sec = parseInt(raw, 10);
+            if (Number.isInteger(sec) && sec >= 0) return sec;
+          }
+        } catch (e) { /* localStorage 不可の環境では初期値を使う */ }
+        return DEFAULTS[page] ?? 0;
+      }
+
+      /** 間隔（秒）を保存する。保存できたら true。 */
+      function set(page, seconds) {
+        try {
+          localStorage.setItem(STORAGE_PREFIX + page, String(seconds));
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function label(seconds) {
+        if (!seconds) return 'オフ';
+        return seconds % 60 === 0 ? (seconds / 60) + '分' : seconds + '秒';
+      }
+
+      /** 設定値の間隔で callback の定期実行を開始し、実効間隔（秒）を返す。 */
+      function start(page, callback) {
+        if (timers[page]) { clearInterval(timers[page]); delete timers[page]; }
+        if (!ENABLED) return 0;
+        const sec = get(page);
+        if (sec > 0) timers[page] = setInterval(callback, sec * 1000);
+        return sec;
+      }
+
+      /** start() の戻り値を画面表示用の文言にする。 */
+      function statusText(seconds) {
+        return seconds > 0 ? label(seconds) + 'ごとに自動更新' : '自動更新オフ';
+      }
+
+      return { get, set, start, label, statusText, choices: CHOICES, enabled: ENABLED };
+    })();
+  </script>
+
   {% block scripts %}{% endblock %}
 
   <!-- 閾値設定モーダル（全ページ共通） -->

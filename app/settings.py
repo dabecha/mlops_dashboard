@@ -29,6 +29,24 @@ def _env_bool(name: str, default: bool) -> bool:
     )
 
 
+def _env_int(name: str, default: int, *, minimum: int = 1) -> int:
+    """環境変数を int として読む（minimum 以上の整数のみ許可）。"""
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        val = int(raw.strip())
+    except ValueError as exc:
+        raise ConfigurationError(
+            log_message=f"{name} の値が不正です: '{raw}'. {minimum} 以上の整数を指定してください"
+        ) from exc
+    if val < minimum:
+        raise ConfigurationError(
+            log_message=f"{name} の値が不正です: '{raw}'. {minimum} 以上の整数を指定してください"
+        )
+    return val
+
+
 class AppMode(str, Enum):
     LOCAL_DEV = "local_dev"
     DEV = "dev"
@@ -46,8 +64,13 @@ class Settings:
             ) from exc
 
         # ── アプリ共通設定 ────────────────────────────────────────────
-        # ダッシュボードの自動更新（詳細: 30 秒、サマリー: 60 秒）の有効化フラグ
+        # ダッシュボード自動更新の有効化フラグ（false で全ページの自動更新を停止）
         self.auto_refresh_enabled: bool = _env_bool("AUTO_REFRESH_ENABLED", True)
+
+        # 自動更新間隔の初期値（秒）。管理ページから変更でき、変更値は
+        # 各ブラウザの localStorage に保存される（未設定のブラウザではこの値を使用）。
+        self.auto_refresh_summary_seconds: int = _env_int("AUTO_REFRESH_SUMMARY_SECONDS", 60)
+        self.auto_refresh_detail_seconds: int = _env_int("AUTO_REFRESH_DETAIL_SECONDS", 30)
 
         # ログレベル（DEBUG のとき @log_call の呼び出しログも出力される）
         raw_level = os.environ.get("LOG_LEVEL", "DEBUG").strip().upper()

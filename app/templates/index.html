@@ -65,6 +65,8 @@
   </svg>
   読み込み中…
 </span>
+
+<span class="text-xs text-gray-600" id="auto-refresh-status" title="間隔は管理ページで変更できます"></span>
 {% endblock %}
 
 {% block content %}
@@ -78,7 +80,7 @@
 <div id="dashboard-content"
      hx-get="./ui/panels"
      hx-include="#filter-form"
-     hx-trigger="load{% if auto_refresh_enabled %}, every 30s{% endif %}"
+     hx-trigger="load"
      hx-indicator="#loading-indicator">
   <div class="flex items-center justify-center h-48 text-gray-500">
     <svg class="w-6 h-6 animate-spin mr-2" fill="none" viewBox="0 0 24 24">
@@ -116,6 +118,13 @@
       values: { project_id: projectId, from_date: fromDate, to_date: toDate }
     });
   }
+
+  // 自動更新（間隔は管理ページで設定）
+  document.addEventListener('DOMContentLoaded', function () {
+    const statusEl = document.getElementById('auto-refresh-status');
+    if (!statusEl) return;
+    statusEl.textContent = AutoRefresh.statusText(AutoRefresh.start('detail', loadPanels));
+  });
 
   document.addEventListener('htmx:afterSettle', initAllCharts);
 

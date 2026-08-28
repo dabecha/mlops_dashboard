@@ -43,14 +43,14 @@
       <span class="ml-2 text-gray-600">• システム指標・精度: 選択期間　ドリフト: 直近ウィンドウ</span>
     </p>
   </div>
-  <span class="text-xs text-gray-600">{% if auto_refresh_enabled %}60秒ごとに自動更新{% else %}自動更新オフ{% endif %}</span>
+  <span class="text-xs text-gray-600" id="auto-refresh-status" title="間隔は管理ページで変更できます"></span>
 </div>
 
 <!-- サマリーパネル（htmx 自動更新） -->
 <div id="summary-content"
      hx-get="./ui/summary-panels"
      hx-vals="js:{from_date: document.getElementById('from-date').value, to_date: document.getElementById('to-date').value}"
-     hx-trigger="load{% if auto_refresh_enabled %}, every 60s{% endif %}"
+     hx-trigger="load"
      hx-indicator="#loading-indicator">
   <div class="flex items-center justify-center h-48 text-gray-500">
     <svg class="w-6 h-6 animate-spin mr-2" fill="none" viewBox="0 0 24 24">
@@ -84,5 +84,12 @@
       values: { from_date: fromDate, to_date: toDate }
     });
   }
+
+  // 自動更新（間隔は管理ページで設定）
+  document.addEventListener('DOMContentLoaded', function () {
+    const statusEl = document.getElementById('auto-refresh-status');
+    if (!statusEl) return;  // プロジェクト未登録時は対象要素なし
+    statusEl.textContent = AutoRefresh.statusText(AutoRefresh.start('summary', loadSummary));
+  });
 </script>
 {% endblock %}

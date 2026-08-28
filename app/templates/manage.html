@@ -159,6 +159,51 @@
     </div>
   </section>
 
+  <!-- ========== 表示設定 ========== -->
+  <section>
+    <h2 class="text-base font-semibold text-white mb-5 flex items-center gap-2 pb-3 border-b border-gray-800">
+      <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      表示設定
+    </h2>
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 max-w-2xl">
+      <h3 class="text-sm font-medium text-gray-300 mb-1">自動更新の間隔</h3>
+      <p class="text-xs text-gray-500 mb-4">
+        各ページが自動で再読み込みする間隔です。設定はこの端末のブラウザに保存され、対象ページを次に開いたときから反映されます。
+      </p>
+
+      {% if not auto_refresh_enabled %}
+      <p class="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 mb-4">
+        自動更新はサーバー設定（<code>.env</code> の <code>AUTO_REFRESH_ENABLED=false</code>）で停止中です。
+        有効化するまで、ここでの設定は反映されません。
+      </p>
+      {% endif %}
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">サマリーページ</label>
+          <select id="refresh-summary"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"></select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">詳細ページ</label>
+          <select id="refresh-detail"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"></select>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 mt-4">
+        <button type="button" onclick="saveAutoRefresh()"
+          class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+          保存
+        </button>
+        <p id="refresh-save-msg" class="text-xs"></p>
+      </div>
+    </div>
+  </section>
+
 </div>
 {% endblock %}
 
@@ -273,5 +318,46 @@
   function toggleAllLogs(master) {
     document.querySelectorAll('.log-checkbox').forEach(cb => cb.checked = master.checked);
   }
+
+  // ── 表示設定: 自動更新の間隔 ────────────────────────────────────
+  // 選択肢は AutoRefresh.choices（base.html）を単一の定義元とする。
+  function _buildRefreshOptions(selectId, page) {
+    const sel = document.getElementById(selectId);
+    const current = AutoRefresh.get(page);
+    const choices = AutoRefresh.choices.slice();
+    // .env の初期値が選択肢にない値でも選べるようにする
+    if (!choices.includes(current)) choices.push(current);
+    choices.sort((a, b) => a - b);
+
+    sel.innerHTML = '';
+    for (const sec of choices) {
+      const opt = document.createElement('option');
+      opt.value = sec;
+      opt.textContent = AutoRefresh.label(sec);
+      if (sec === current) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+
+  function saveAutoRefresh() {
+    const msgEl = document.getElementById('refresh-save-msg');
+    const saved =
+      AutoRefresh.set('summary', parseInt(document.getElementById('refresh-summary').value, 10)) &&
+      AutoRefresh.set('detail',  parseInt(document.getElementById('refresh-detail').value, 10));
+
+    if (saved) {
+      msgEl.textContent = '保存しました（各ページを次に開いたときから反映されます）';
+      msgEl.className = 'text-xs text-emerald-400';
+      setTimeout(() => { msgEl.textContent = ''; }, 4000);
+    } else {
+      msgEl.textContent = 'この端末のブラウザ設定では保存できませんでした';
+      msgEl.className = 'text-xs text-red-400';
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    _buildRefreshOptions('refresh-summary', 'summary');
+    _buildRefreshOptions('refresh-detail', 'detail');
+  });
 </script>
 {% endblock %}
