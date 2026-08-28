@@ -9,6 +9,9 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ProjectCreate(BaseModel):
+    # dev / production モードでは必須（Dataiku プロジェクトキーと一致させる）。
+    # local_dev モードでは省略可（未指定なら uuid を自動採番）。
+    project_id: Optional[str] = Field(None, min_length=1, max_length=100)
     project_name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
     task_type: Literal["binary", "multi-class", "multi-label", "regression"] = "binary"

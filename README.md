@@ -177,6 +177,7 @@ POST /api/projects
 Content-Type: application/json
 
 {
+  "project_id": "FRAUD_DETECTION",   # dev/production では必須（Dataiku プロジェクトキーと一致させる）。local_dev では省略可（自動採番）
   "project_name": "fraud-detection",
   "description": "クレジットカード不正検知モデル",
   "task_type": "binary"   # "binary" | "multi-class" | "multi-label" | "regression"

@@ -33,9 +33,27 @@ router = APIRouter(prefix="/api", tags=["ingest"])
 @router.post("/projects", response_model=ProjectResponse, status_code=201)
 @log_call
 def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
+    if settings.is_dataiku:
+        if not body.project_id:
+            raise ValidationError(
+                "dev / production モードでは project_id（Dataiku プロジェクトキー）の指定が必要です"
+            )
+        from ..dataiku_client import create_project as dku_create_project
+        return dku_create_project(
+            project_id=body.project_id,
+            project_name=body.project_name,
+            description=body.description,
+            task_type=body.task_type,
+        )
     if db.query(Project).filter(Project.project_name == body.project_name).first():
         raise ValidationError("同名のプロジェクトが既に存在します")
-    project = Project(**body.model_dump())
+    data = body.model_dump()
+    if not data.get("project_id"):
+        # 未指定なら models.Project のデフォルト（uuid 採番）に任せる
+        data.pop("project_id", None)
+    elif db.get(Project, data["project_id"]):
+        raise ValidationError("同じプロジェクトIDが既に存在します")
+    project = Project(**data)
     db.add(project)
     db.commit()
     db.refresh(project)

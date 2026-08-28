@@ -21,6 +21,17 @@
       <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
         <h3 class="text-sm font-medium text-gray-300 mb-4">新規登録</h3>
         <form id="project-create-form" onsubmit="handleProjectCreate(event)" class="space-y-3">
+          {% if app_mode != 'local_dev' %}
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">
+              プロジェクトID <span class="text-red-400">*</span>
+            </label>
+            <input type="text" name="project_id" required maxlength="100"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-600"
+              placeholder="例: FRAUD_DETECTION">
+            <p class="text-[11px] text-gray-500 mt-1">Dataiku プロジェクトキーと一致させてください</p>
+          </div>
+          {% endif %}
           <div>
             <label class="block text-xs text-gray-400 mb-1">
               プロジェクト名 <span class="text-red-400">*</span>

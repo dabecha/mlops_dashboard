@@ -32,6 +32,7 @@ from .exceptions import (
     DataSourceError,
     MissingColumnError,
     MissingDatasetError,
+    ValidationError,
 )
 from .models import DeployedModel, InferenceLog, Project, ProjectConfig, ReferenceLog
 from .prediction import parse_value
@@ -261,6 +262,49 @@ def get_project_by_id(project_id: str) -> Project | None:
     """project_id でプロジェクトを 1 件取得する。"""
     projects = get_projects()
     return next((p for p in projects if str(p.project_id) == str(project_id)), None)
+
+
+@log_call
+def create_project(
+    project_id: str,
+    project_name: str,
+    description: str | None,
+    task_type: str,
+) -> Project:
+    """管理プロジェクトの m_projects にプロジェクトを追加する。
+
+    project_id は対象の Dataiku プロジェクトキーと一致させる必要がある
+    （_get_target_project_key が project_id をキーとして解決するため）。
+    project_id / project_name が重複する場合は ValidationError を送出する。
+    """
+    import pandas as pd
+    df = _fetch_df(settings.dku_ds_projects)
+    _validate_columns(df, Project, settings.dku_ds_projects)
+
+    if not df.empty:
+        if bool((df["project_id"].astype(str) == str(project_id)).any()):
+            raise ValidationError("同じプロジェクトIDが既に存在します")
+        if bool((df["project_name"].astype(str) == str(project_name)).any()):
+            raise ValidationError("同名のプロジェクトが既に存在します")
+
+    now = datetime.utcnow()
+    new_row = {
+        "project_id": str(project_id),
+        "project_name": project_name,
+        "description": description,
+        "task_type": task_type,
+        "created_at": _now_for_column(df, "created_at", now),
+    }
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    _write_df(df, settings.dku_ds_projects)
+    logger.info("create_project: project_id=%s を m_projects に追加", project_id)
+    return Project(
+        project_id=str(project_id),
+        project_name=project_name,
+        description=description,
+        task_type=task_type,
+        created_at=now,
+    )
 
 
 @log_call
