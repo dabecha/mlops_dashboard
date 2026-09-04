@@ -205,7 +205,8 @@ def _ops_dataset_name(suffix: str, project_id: str) -> str:
     （例: node_1234_FRAUD_DETECTION_T_INFERENCE_LOGS）。
     DKU_SNOWFLAKE_NODE が未設定の場合はノード名部分を省略する。
     """
-    parts = [settings.dku_snowflake_node, str(project_id), suffix]
+    # parts = [settings.dku_snowflake_node, str(project_id), suffix]
+    parts = [str(project_id), suffix]
     return "_".join(p for p in parts if p)
 
 
