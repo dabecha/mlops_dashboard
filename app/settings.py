@@ -92,28 +92,35 @@ class Settings:
         self.dataiku_host: str = os.environ.get("DATAIKU_HOST", "")
         self.dataiku_api_key: str = os.environ.get("DATAIKU_API_KEY", "")
 
-        # 管理プロジェクト: m_projects のマスタデータを格納
+        # 管理プロジェクト: すべてのデータセットを格納する Dataiku プロジェクト
         self.dku_mgmt_project_key: str = os.environ.get(
             "DATAIKU_MGMT_PROJECT_KEY", "mlops_dev"
         )
 
+        # Ops 対象プロジェクト単位のデータセット名に付く SNOWFLAKE ノード名
+        # 例: node_1234 → node_1234_{project_id}_T_INFERENCE_LOGS
+        self.dku_snowflake_node: str = os.environ.get("DKU_SNOWFLAKE_NODE", "")
+
         # ── Dataiku データセット名 ────────────────────────────────────
-        # デフォルト値は SQLite のテーブル名と同じ（カラム名も準拠）
+        # 管理プロジェクト全体で共有するデータセット（接頭語なし）
         self.dku_ds_projects: str = os.environ.get(
             "DKU_DATASET_PROJECTS", "m_projects"
         )
-        # m_projects と同じ管理プロジェクトに配備される閾値設定データセット
         self.dku_ds_project_configs: str = os.environ.get(
             "DKU_DATASET_PROJECT_CONFIGS", "m_project_configs"
         )
+
+        # Ops 対象プロジェクト単位のデータセット名の接尾語。
+        # 実際の名前は {DKU_SNOWFLAKE_NODE}_{project_id}_{接尾語} で組み立てる
+        # （dataiku_client._ops_dataset_name）。
         self.dku_ds_inference_logs: str = os.environ.get(
-            "DKU_DATASET_INFERENCE_LOGS", "t_inference_logs"
+            "DKU_DATASET_INFERENCE_LOGS", "T_INFERENCE_LOGS"
         )
         self.dku_ds_deployed_models: str = os.environ.get(
-            "DKU_DATASET_DEPLOYED_MODELS", "t_deployed_models"
+            "DKU_DATASET_DEPLOYED_MODELS", "T_DEPLOYED_MODELS"
         )
         self.dku_ds_reference_logs: str = os.environ.get(
-            "DKU_DATASET_REFERENCE_LOGS", "t_reference_logs"
+            "DKU_DATASET_REFERENCE_LOGS", "T_REFERENCE_LOGS"
         )
 
     @property

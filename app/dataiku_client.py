@@ -4,16 +4,19 @@ Dataiku DSS データプロバイダー
 dev / production モードで Dataiku データセットから pandas DataFrame を取得する。
 
 プロジェクト構成:
-  管理プロジェクト (DATAIKU_MGMT_PROJECT_KEY, デフォルト: mlops_dev)
-    - m_projects        … MLOps 管理対象プロジェクト一覧
-    - m_agent_projects  … エージェントプロジェクト一覧
-    - m_agent_ref_data  … エージェントドリフト参照データ
+  すべてのデータセットは管理プロジェクト
+  (DATAIKU_MGMT_PROJECT_KEY, デフォルト: mlops_dev) に配備される。
 
-  各 Ops 対象プロジェクト (m_projects.project_id = Dataiku プロジェクトキー)
-    - t_inference_logs  … 推論ログ
-    - t_deployed_models … デプロイ済みモデル
-    - t_agent_tasks     … エージェントタスクログ
-    - t_agent_steps     … エージェントステップログ
+  プロジェクト共通のデータセット（接頭語なし）
+    - m_projects         … MLOps 管理対象プロジェクト一覧
+    - m_project_configs  … プロジェクトごとの閾値設定
+
+  Ops 対象プロジェクト単位のデータセット
+  （{SNOWFLAKE ノード名}_{project_id}_{接尾語} という名前で配備される。
+    例: node_1234_FRAUD_DETECTION_T_INFERENCE_LOGS）
+    - ..._T_INFERENCE_LOGS  … 推論ログ
+    - ..._T_DEPLOYED_MODELS … デプロイ済みモデル
+    - ..._T_REFERENCE_LOGS  … 学習データ・ドリフト参照データ
 
 dataiku パッケージは DSS 環境内でのみ利用可能なため、遅延インポートを使用。
 """
@@ -46,14 +49,14 @@ logger = logging.getLogger(__name__)
 
 _LOW_LEVEL_HELPERS = {
     "_calling_function", "_source_error_message",
-    "_fetch_df", "_write_df", "_list_dataset_names",
+    "_fetch_df", "_write_df", "_list_dataset_names", "_ops_dataset_name",
 }
 
 
 def _calling_function() -> str:
     """低レベルヘルパー（_fetch_df 等）に至る本モジュール内の呼び出し連鎖を返す。
 
-    例: "get_inference_logs_df > _get_target_project_key"（外側から順、最大 3 段）。
+    例: "get_inference_logs_df > _resolve_ops_project_id"（外側から順、最大 3 段）。
     log_call デコレータの wrapper（logging_utils.py）は別ファイルのため除外される。
     特定できない場合は "(不明)" を返す。
     """
@@ -193,15 +196,25 @@ def _to_naive_utc(series):
     return col
 
 
-# ── プロジェクト解決 ─────────────────────────────────────────────────────────
+# ── プロジェクト解決 / データセット名の組み立て ──────────────────────────────
+
+def _ops_dataset_name(suffix: str, project_id: str) -> str:
+    """Ops 対象プロジェクト単位のデータセット名を組み立てる。
+
+    形式は {SNOWFLAKE ノード名}_{project_id}_{接尾語}
+    （例: node_1234_FRAUD_DETECTION_T_INFERENCE_LOGS）。
+    DKU_SNOWFLAKE_NODE が未設定の場合はノード名部分を省略する。
+    """
+    parts = [settings.dku_snowflake_node, str(project_id), suffix]
+    return "_".join(p for p in parts if p)
+
 
 @log_call
-def _get_target_project_key(project_id: str) -> str | None:
-    """project_id に対応する Dataiku プロジェクトキーを返す。
+def _resolve_ops_project_id(project_id: str) -> str | None:
+    """データセット名の接頭語に使う Ops 対象プロジェクトの project_id を返す。
 
-    Dataiku プロジェクトキーは project_id と一致する。
     管理プロジェクト (dku_mgmt_project_key) の m_projects に登録済みか確認したうえで、
-    project_id を文字列キーとして返す（未登録なら None）。
+    project_id を文字列として返す（未登録なら None）。
     """
     df = _fetch_df(settings.dku_ds_projects)
     _validate_columns(df, Project, settings.dku_ds_projects)
@@ -213,29 +226,30 @@ def _get_target_project_key(project_id: str) -> str | None:
 
 @log_call
 def check_project_datasets(project_id: str) -> None:
-    """Ops プロジェクトに必須テーブルが揃っているか確認する。
+    """Ops プロジェクトの必須テーブルが管理プロジェクトに揃っているか確認する。
 
-    t_deployed_models / t_inference_logs / t_reference_logs のいずれかが
-    存在しない場合はエラーログを出力し、MissingDatasetError を送出する
+    ..._T_DEPLOYED_MODELS / ..._T_INFERENCE_LOGS / ..._T_REFERENCE_LOGS の
+    いずれかが存在しない場合はエラーログを出力し、MissingDatasetError を送出する
     （どのテーブルが不足しているかをユーザー画面に表示するため）。
     """
-    dku_project_key = _get_target_project_key(project_id)
-    if not dku_project_key:
+    ops_project_id = _resolve_ops_project_id(project_id)
+    if not ops_project_id:
         return
 
     required = [
-        settings.dku_ds_deployed_models,
-        settings.dku_ds_inference_logs,
-        settings.dku_ds_reference_logs,
+        _ops_dataset_name(settings.dku_ds_deployed_models, ops_project_id),
+        _ops_dataset_name(settings.dku_ds_inference_logs, ops_project_id),
+        _ops_dataset_name(settings.dku_ds_reference_logs, ops_project_id),
     ]
-    existing = _list_dataset_names(dku_project_key)
+    existing = _list_dataset_names(settings.dku_mgmt_project_key)
     missing = [name for name in required if name not in existing]
     if missing:
         logger.error(
-            "プロジェクト '%s' に必須テーブルがありません: %s（Dataiku で作成が必要）",
-            dku_project_key, missing,
+            "プロジェクト '%s' の必須テーブルが管理プロジェクト '%s' にありません: %s"
+            "（Dataiku で作成が必要）",
+            ops_project_id, settings.dku_mgmt_project_key, missing,
         )
-        raise MissingDatasetError(missing, dku_project_key)
+        raise MissingDatasetError(missing, ops_project_id, settings.dku_mgmt_project_key)
 
 
 # ── プロジェクト一覧（管理プロジェクトから取得） ──────────────────────────────
@@ -274,7 +288,7 @@ def create_project(
     """管理プロジェクトの m_projects にプロジェクトを追加する。
 
     project_id は対象の Dataiku プロジェクトキーと一致させる必要がある
-    （_get_target_project_key が project_id をキーとして解決するため）。
+    （project_id がデータセット名の接頭語として使われるため）。
     project_id / project_name が重複する場合は ValidationError を送出する。
     """
     import pandas as pd
@@ -311,8 +325,8 @@ def create_project(
 def delete_project(project_id: str) -> bool:
     """管理プロジェクトの m_projects から指定プロジェクトを削除する。
 
-    m_projects の行のみを削除し、各 Ops プロジェクトの子データ
-    (t_inference_logs 等) は変更しない。削除できたら True を返す。
+    m_projects の行のみを削除し、プロジェクト単位の子データセット
+    (..._T_INFERENCE_LOGS 等) は変更しない。削除できたら True を返す。
     """
     df = _fetch_df(settings.dku_ds_projects)
     _validate_columns(df, Project, settings.dku_ds_projects)
@@ -404,23 +418,23 @@ def upsert_project_config(project_id: str, values: dict) -> dict:
     return {**values, "project_id": str(project_id), "updated_at": now}
 
 
-# ── ML 推論ログ（各 Ops 対象プロジェクトから取得） ───────────────────────────
+# ── ML 推論ログ（管理プロジェクトのプロジェクト単位データセットから取得） ────
 
 @log_call
 def get_inference_logs_df(project_id: str, since: datetime | None = None, until: datetime | None = None):
-    """対象プロジェクトの t_inference_logs を取得する。
+    """対象プロジェクトの推論ログデータセットを取得する。
 
-    project_id を Dataiku プロジェクトキーとして解決し、
-    そのプロジェクト内の t_inference_logs データセットを取得する。
+    管理プロジェクト内の {ノード名}_{project_id}_T_INFERENCE_LOGS を取得する。
     since / until を指定すると request_timestamp が since 以上 until 未満の行に絞る。
     """
     import pandas as pd
-    dku_project_key = _get_target_project_key(project_id)
-    if not dku_project_key:
+    ops_project_id = _resolve_ops_project_id(project_id)
+    if not ops_project_id:
         return pd.DataFrame()
 
-    df = _fetch_df(settings.dku_ds_inference_logs, project_key=dku_project_key)
-    _validate_columns(df, InferenceLog, settings.dku_ds_inference_logs)
+    dataset = _ops_dataset_name(settings.dku_ds_inference_logs, ops_project_id)
+    df = _fetch_df(dataset)
+    _validate_columns(df, InferenceLog, dataset)
     if df.empty:
         return df
 
@@ -452,7 +466,7 @@ def get_inference_logs_page(
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[InferenceLog], int]:
-    """t_inference_logs をフィルタ・ページング付きで取得する。
+    """推論ログをフィルタ・ページング付きで取得する。
 
     ログ一覧 UI 向け。local_dev モード（DB クエリ）と型を揃えるため、
     models.InferenceLog インスタンスのリストと総件数のタプルを返す。
@@ -478,19 +492,20 @@ def get_inference_logs_page(
 
 @log_call
 def delete_inference_logs(project_id: str, log_ids: list[str]) -> int:
-    """対象プロジェクトの t_inference_logs から指定ログを削除する。
+    """対象プロジェクトの推論ログデータセットから指定ログを削除する。
 
     データセットを読み込み、log_id が log_ids に含まれる行を除外して
     書き戻す。削除した件数を返す。
     """
     if not log_ids:
         return 0
-    dku_project_key = _get_target_project_key(project_id)
-    if not dku_project_key:
+    ops_project_id = _resolve_ops_project_id(project_id)
+    if not ops_project_id:
         return 0
 
-    df = _fetch_df(settings.dku_ds_inference_logs, project_key=dku_project_key)
-    _validate_columns(df, InferenceLog, settings.dku_ds_inference_logs)
+    dataset = _ops_dataset_name(settings.dku_ds_inference_logs, ops_project_id)
+    df = _fetch_df(dataset)
+    _validate_columns(df, InferenceLog, dataset)
     if df.empty or "log_id" not in df.columns:
         return 0
 
@@ -501,25 +516,25 @@ def delete_inference_logs(project_id: str, log_ids: list[str]) -> int:
         return 0
 
     remaining = df[~mask].reset_index(drop=True)
-    _write_df(remaining, settings.dku_ds_inference_logs, project_key=dku_project_key)
+    _write_df(remaining, dataset)
     logger.info("delete_inference_logs: project_id=%s から %d 件削除", project_id, deleted)
     return deleted
 
 
 @log_call
 def get_deployed_models_df(project_id: str):
-    """対象プロジェクトの t_deployed_models を取得する。
+    """対象プロジェクトのデプロイ済みモデルデータセットを取得する。
 
-    project_id を Dataiku プロジェクトキーとして解決し、
-    そのプロジェクト内の t_deployed_models データセットを取得する。
+    管理プロジェクト内の {ノード名}_{project_id}_T_DEPLOYED_MODELS を取得する。
     """
     import pandas as pd
-    dku_project_key = _get_target_project_key(project_id)
-    if not dku_project_key:
+    ops_project_id = _resolve_ops_project_id(project_id)
+    if not ops_project_id:
         return pd.DataFrame()
 
-    df = _fetch_df(settings.dku_ds_deployed_models, project_key=dku_project_key)
-    _validate_columns(df, DeployedModel, settings.dku_ds_deployed_models)
+    dataset = _ops_dataset_name(settings.dku_ds_deployed_models, ops_project_id)
+    df = _fetch_df(dataset)
+    _validate_columns(df, DeployedModel, dataset)
     if df.empty:
         return df
 
@@ -532,14 +547,18 @@ def get_deployed_models_df(project_id: str):
 
 @log_call
 def get_reference_logs_df(project_id: str, model_id: str | None = None):
-    """対象プロジェクトの t_reference_logs を取得する。"""
+    """対象プロジェクトの参照ログデータセットを取得する。
+
+    管理プロジェクト内の {ノード名}_{project_id}_T_REFERENCE_LOGS を取得する。
+    """
     import pandas as pd
-    dku_project_key = _get_target_project_key(project_id)
-    if not dku_project_key:
+    ops_project_id = _resolve_ops_project_id(project_id)
+    if not ops_project_id:
         return pd.DataFrame()
 
-    df = _fetch_df(settings.dku_ds_reference_logs, project_key=dku_project_key)
-    _validate_columns(df, ReferenceLog, settings.dku_ds_reference_logs)
+    dataset = _ops_dataset_name(settings.dku_ds_reference_logs, ops_project_id)
+    df = _fetch_df(dataset)
+    _validate_columns(df, ReferenceLog, dataset)
     if df.empty:
         return df
 

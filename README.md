@@ -49,8 +49,8 @@ ML プロジェクトのマスターテーブル。
 
 | カラム | 型 | NULL | デフォルト | 説明 |
 |---|---|---|---|---|
-| `project_id` | VARCHAR(100) | NO | auto | 主キー |
-| `project_name` | VARCHAR(100) | NO | — | プロジェクト名（ユニーク）。Dataiku モードでは Dataiku プロジェクトキーとして使用 |
+| `project_id` | VARCHAR(100) | NO | auto | 主キー。Dataiku モードではデータセット名の接頭語として使用 |
+| `project_name` | VARCHAR(100) | NO | — | プロジェクト名（ユニーク）。表示用 |
 | `description` | VARCHAR(500) | YES | NULL | 説明文 |
 | `task_type` | VARCHAR(20) | NO | `binary` | タスク種別: `binary` / `multi-class` / `multi-label` / `regression` |
 | `created_at` | DATETIME | NO | 現在時刻 | 登録日時（日本時間） |
@@ -163,6 +163,29 @@ ML モデルの推論リクエスト・結果ログ。1 リクエスト = 1 レ�
                                         created_at
                                         updated_at
 ```
+
+---
+
+### Dataiku モード（dev / production）でのデータセット配備
+
+`APP_MODE=dev` / `production` では、上記テーブルはすべて **管理プロジェクト**
+（`DATAIKU_MGMT_PROJECT_KEY`、デフォルト `mlops_dev`）内の Dataiku データセットとして配備する。
+
+| データセット | 名前 |
+|---|---|
+| プロジェクト一覧 | `m_projects` |
+| プロジェクト閾値設定 | `m_project_configs` |
+| デプロイ済みモデル | `{ノード名}_{project_id}_T_DEPLOYED_MODELS` |
+| 推論ログ | `{ノード名}_{project_id}_T_INFERENCE_LOGS` |
+| 参照ログ | `{ノード名}_{project_id}_T_REFERENCE_LOGS` |
+
+- `{ノード名}` は `.env` の `DKU_SNOWFLAKE_NODE`（例: `node_1234`）
+- `{project_id}` は `m_projects.project_id`
+- 接尾語は `DKU_DATASET_INFERENCE_LOGS` 等で変更可能（デフォルトは大文字）
+- 例: `node_1234_FRAUD_DETECTION_T_INFERENCE_LOGS`
+
+プロジェクト単位の 3 データセットが管理プロジェクトに存在しない場合、
+該当プロジェクトのパネルに不足テーブル名を含むエラーが表示される。
 
 ---
 
